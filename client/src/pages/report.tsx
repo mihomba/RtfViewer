@@ -44,7 +44,7 @@ export default function ReportPage() {
     divineServices: [],
     offerings: {
       totalCollected: 0,
-      transferred: false,
+      transferred: undefined,
       amountTransferred: 0,
       retained: 0,
       specialProjects: '',
@@ -239,7 +239,7 @@ export default function ReportPage() {
               <OfferingsSection
                 data={reportData.offerings!}
                 onChange={(data) => updateSection('offerings', data)}
-                isComplete={!!(reportData.offerings?.totalCollected || reportData.offerings?.specialProjects || reportData.offerings?.nextQuarterNeeds)}
+                isComplete={!!(reportData.offerings?.totalCollected && reportData.offerings?.totalCollected > 0)}
               />
 
               <LeadersSection

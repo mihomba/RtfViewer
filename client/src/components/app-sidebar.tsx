@@ -75,7 +75,7 @@ export function AppSidebar({ currentSection = "general-info", onSectionChange, r
       
       case "offerings":
         return !!(reportData.offerings?.totalCollected !== undefined && 
-                 reportData.offerings?.totalCollected >= 0);
+                 reportData.offerings?.totalCollected > 0);
       
       case "facilities":
         return !!(reportData.facilities?.length > 0);

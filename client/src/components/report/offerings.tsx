@@ -75,11 +75,11 @@ export function OfferingsSection({ data, onChange, isComplete }: OfferingsProps)
             <div>
               <Label htmlFor="transferred">Transferred to Main Church</Label>
               <Select 
-                value={data.transferred?.toString() || 'false'} 
+                value={data.transferred?.toString() || ''} 
                 onValueChange={handleTransferredChange}
               >
                 <SelectTrigger className="mt-2" data-testid="select-transferred">
-                  <SelectValue />
+                  <SelectValue placeholder="Select option" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="true">Yes</SelectItem>
