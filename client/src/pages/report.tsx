@@ -20,9 +20,9 @@ export default function ReportPage() {
   const [, params] = useRoute('/report/:id');
   const reportId = params?.id === 'new' ? undefined : params?.id;
   const { toast } = useToast();
-  
+
   const { report, createReport, updateReport, isLoading, isCreating, isUpdating } = useReport(reportId);
-  
+
   const [reportData, setReportData] = useState<Partial<Report>>({
     generalInfo: {
       branchName: '',
@@ -67,7 +67,7 @@ export default function ReportPage() {
   });
 
   const [currentSection, setCurrentSection] = useState('general-info');
-  
+
   // Auto-save functionality
   const { markUnsaved } = useAutoSave(reportId, reportData);
 
@@ -113,13 +113,13 @@ export default function ReportPage() {
   const handleSubmit = async () => {
     try {
       const submittedData = { ...reportData, status: 'submitted' as const };
-      
+
       if (reportId) {
         await updateReport({ id: reportId, data: submittedData });
       } else {
         await createReport(submittedData as InsertReport);
       }
-      
+
       toast({
         title: "Report Submitted",
         description: "Your report has been submitted successfully.",
@@ -156,8 +156,13 @@ export default function ReportPage() {
   return (
     <SidebarProvider style={style as React.CSSProperties}>
       <div className="main-container flex h-screen">
-        <AppSidebar currentSection={currentSection} onSectionChange={setCurrentSection} />
-        
+        {/* Sidebar */}
+        <AppSidebar 
+          currentSection={currentSection}
+          onSectionChange={setCurrentSection}
+          reportData={reportData}
+        />
+
         <div className="content-wrapper flex flex-col">
           {/* Header */}
           <header className="bg-card shadow-sm border-b sticky top-0 z-50">
@@ -174,15 +179,15 @@ export default function ReportPage() {
                   </div>
                 </div>
               </div>
-              
+
               <div className="flex items-center space-x-4">
                 <div className="flex items-center space-x-2 text-sm">
                   <div className="w-2 h-2 bg-primary rounded-full animate-pulse"></div>
                   <span className="text-muted-foreground">Auto-saved</span>
                 </div>
-                
+
                 <ThemeToggle />
-                
+
                 <Button 
                   variant="secondary" 
                   onClick={handleExportPDF}
@@ -191,7 +196,7 @@ export default function ReportPage() {
                   <FileText className="h-4 w-4 mr-2" />
                   Export PDF
                 </Button>
-                
+
                 <Button 
                   onClick={handleSave}
                   disabled={isUpdating || isCreating}
@@ -212,41 +217,41 @@ export default function ReportPage() {
                 onChange={(data) => updateSection('generalInfo', data)}
                 isComplete={!!(reportData.generalInfo?.branchName && reportData.generalInfo?.reportingQuarter && reportData.generalInfo?.leaderName)}
               />
-              
+
               <MembershipSection
                 data={reportData.membership!}
                 onChange={(data) => updateSection('membership', data)}
-                isComplete={true}
+                isComplete={!!(reportData.membership?.activeMembers && reportData.membership?.newMembers && reportData.membership?.inactiveMembers && reportData.membership?.baptismCandidates && reportData.membership?.newInterests && reportData.membership?.relocations)}
               />
-              
+
               <YouthProgramsSection
                 data={reportData.youthActivities!}
                 onChange={(data) => updateSection('youthActivities', data)}
                 isComplete={reportData.youthActivities!.length > 0}
               />
-              
+
               <DivineServicesSection
                 data={reportData.divineServices!}
                 onChange={(data) => updateSection('divineServices', data)}
                 isComplete={reportData.divineServices!.length > 0}
               />
-              
+
               <OfferingsSection
                 data={reportData.offerings!}
                 onChange={(data) => updateSection('offerings', data)}
-                isComplete={true}
+                isComplete={!!(reportData.offerings?.totalCollected || reportData.offerings?.specialProjects || reportData.offerings?.nextQuarterNeeds)}
               />
-              
+
               <LeadersSection
                 data={reportData.leaders!}
                 onChange={(data) => updateSection('leaders', data)}
                 isComplete={!!(reportData.leaders?.elder && reportData.leaders?.reportSubmittedBy)}
               />
-              
+
               <SummarySection
                 data={reportData.summary!}
                 onChange={(data) => updateSection('summary', data)}
-                isComplete={true}
+                isComplete={!!(reportData.summary?.spiritualHealth && reportData.summary?.nextQuarterGoals && reportData.summary?.plannedActivities && reportData.summary?.comment)}
               />
 
               {/* Action Buttons */}
@@ -261,7 +266,7 @@ export default function ReportPage() {
                   <Save className="h-4 w-4 mr-2" />
                   Save as Draft
                 </Button>
-                
+
                 <Button 
                   variant="secondary" 
                   className="flex-1"
@@ -271,7 +276,7 @@ export default function ReportPage() {
                   <Eye className="h-4 w-4 mr-2" />
                   Preview Report
                 </Button>
-                
+
                 <Button 
                   className="flex-1"
                   onClick={handleSubmit}
