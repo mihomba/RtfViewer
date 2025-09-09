@@ -149,13 +149,66 @@ export default function ReportPage() {
       if (sidebar) sidebar.style.display = 'none';
       if (header) header.style.display = 'none';
 
-      // Capture the content as canvas
-      const canvas = await html2canvas(element, {
-        scale: 2,
+      // Create a temporary wrapper to avoid CSS parsing issues
+      const wrapper = document.createElement('div');
+      wrapper.style.cssText = `
+        position: absolute;
+        top: -9999px;
+        left: -9999px;
+        width: ${element.offsetWidth}px;
+        background: white;
+        color: black;
+        font-family: Arial, sans-serif;
+        padding: 20px;
+      `;
+
+      // Clone the content and simplify styles
+      const clonedElement = element.cloneNode(true) as HTMLElement;
+      
+      // Remove problematic CSS properties
+      const allElements = clonedElement.querySelectorAll('*');
+      allElements.forEach((el) => {
+        const htmlEl = el as HTMLElement;
+        // Reset potentially problematic styles
+        htmlEl.style.removeProperty('color');
+        htmlEl.style.removeProperty('background-color');
+        htmlEl.style.removeProperty('border-color');
+        htmlEl.style.removeProperty('box-shadow');
+        htmlEl.style.removeProperty('text-shadow');
+        
+        // Set safe colors
+        if (htmlEl.tagName === 'H1' || htmlEl.tagName === 'H2' || htmlEl.tagName === 'H3') {
+          htmlEl.style.color = '#000000';
+          htmlEl.style.fontWeight = 'bold';
+        } else {
+          htmlEl.style.color = '#333333';
+        }
+        
+        // Remove animations and transitions
+        htmlEl.style.transition = 'none';
+        htmlEl.style.animation = 'none';
+      });
+
+      wrapper.appendChild(clonedElement);
+      document.body.appendChild(wrapper);
+
+      // Capture the content as canvas with improved options
+      const canvas = await html2canvas(wrapper, {
+        scale: 1.5,
         useCORS: true,
         allowTaint: true,
-        backgroundColor: '#ffffff'
+        backgroundColor: '#ffffff',
+        logging: false,
+        ignoreElements: (element) => {
+          // Ignore elements that might cause issues
+          return element.tagName === 'SCRIPT' || 
+                 element.tagName === 'STYLE' ||
+                 element.classList.contains('ignore-pdf');
+        }
       });
+
+      // Clean up
+      document.body.removeChild(wrapper);
 
       // Restore sidebar and header
       if (sidebar) sidebar.style.display = '';
@@ -188,9 +241,17 @@ export default function ReportPage() {
       const fileName = `${reportData.generalInfo?.branchName || 'Branch'}_Report_${reportData.generalInfo?.reportingQuarter || 'Q1'}.pdf`;
       pdf.save(fileName);
 
-      console.log('PDF exported successfully');
+      toast({
+        title: "PDF Exported",
+        description: "Your report has been successfully exported as PDF.",
+      });
     } catch (error) {
       console.error('Error exporting PDF:', error);
+      toast({
+        title: "Export Failed",
+        description: "Failed to export PDF. Please try again.",
+        variant: "destructive",
+      });
     }
   };
 
