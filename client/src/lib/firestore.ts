@@ -16,12 +16,20 @@ import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage
 import { db, storage } from "./firebase";
 import type { Report, InsertReport } from "@shared/schema";
 
+// Check if Firebase is properly configured
+const isFirebaseConfigured = import.meta.env.VITE_FIREBASE_API_KEY && 
+                             import.meta.env.VITE_FIREBASE_PROJECT_ID && 
+                             import.meta.env.VITE_FIREBASE_APP_ID;
+
 // Reports collection
 const reportsCollection = collection(db, "reports");
 
 export const reportsService = {
   // Create new report
   async createReport(reportData: InsertReport): Promise<string> {
+    if (!isFirebaseConfigured) {
+      throw new Error("Firebase configuration required. Please provide your Firebase credentials.");
+    }
     const docRef = await addDoc(reportsCollection, {
       ...reportData,
       createdAt: serverTimestamp(),
@@ -63,15 +71,24 @@ export const reportsService = {
 
   // Get all reports
   async getReports(): Promise<Report[]> {
-    const q = query(reportsCollection, orderBy("createdAt", "desc"));
-    const querySnapshot = await getDocs(q);
-    
-    return querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-      createdAt: doc.data().createdAt?.toDate()?.toISOString() || new Date().toISOString(),
-      updatedAt: doc.data().updatedAt?.toDate()?.toISOString() || new Date().toISOString(),
-    })) as Report[];
+    if (!isFirebaseConfigured) {
+      // Return empty array when Firebase isn't configured
+      return [];
+    }
+    try {
+      const q = query(reportsCollection, orderBy("createdAt", "desc"));
+      const querySnapshot = await getDocs(q);
+      
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        createdAt: doc.data().createdAt?.toDate()?.toISOString() || new Date().toISOString(),
+        updatedAt: doc.data().updatedAt?.toDate()?.toISOString() || new Date().toISOString(),
+      })) as Report[];
+    } catch (error) {
+      console.warn("Firebase connection issue:", error);
+      return [];
+    }
   },
 };
 
