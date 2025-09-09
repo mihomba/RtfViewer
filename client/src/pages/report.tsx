@@ -133,11 +133,65 @@ export default function ReportPage() {
     }
   };
 
-  const handleExportPDF = () => {
-    toast({
-      title: "PDF Export",
-      description: "PDF export functionality will be implemented.",
-    });
+  const handleExportPDF = async () => {
+    try {
+      const { default: jsPDF } = await import('jspdf');
+      const { default: html2canvas } = await import('html2canvas');
+
+      // Get the main content element
+      const element = document.querySelector('main');
+      if (!element) return;
+
+      // Hide sidebar and header for PDF
+      const sidebar = document.querySelector('[data-sidebar]');
+      const header = document.querySelector('header');
+
+      if (sidebar) sidebar.style.display = 'none';
+      if (header) header.style.display = 'none';
+
+      // Capture the content as canvas
+      const canvas = await html2canvas(element, {
+        scale: 2,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#ffffff'
+      });
+
+      // Restore sidebar and header
+      if (sidebar) sidebar.style.display = '';
+      if (header) header.style.display = '';
+
+      // Create PDF
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const imgData = canvas.toDataURL('image/png');
+
+      const imgWidth = 210; // A4 width in mm
+      const pageHeight = 295; // A4 height in mm
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      let heightLeft = imgHeight;
+
+      let position = 0;
+
+      // Add first page
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+
+      // Add additional pages if content is longer
+      while (heightLeft >= 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+
+      // Save the PDF
+      const fileName = `${reportData.generalInfo?.branchName || 'Branch'}_Report_${reportData.generalInfo?.reportingQuarter || 'Q1'}.pdf`;
+      pdf.save(fileName);
+
+      console.log('PDF exported successfully');
+    } catch (error) {
+      console.error('Error exporting PDF:', error);
+    }
   };
 
   if (isLoading) {
@@ -157,7 +211,7 @@ export default function ReportPage() {
     <SidebarProvider style={style as React.CSSProperties}>
       <div className="main-container flex h-screen">
         {/* Sidebar */}
-        <AppSidebar 
+        <AppSidebar
           currentSection={currentSection}
           onSectionChange={setCurrentSection}
           reportData={reportData}
@@ -188,8 +242,8 @@ export default function ReportPage() {
 
                 <ThemeToggle />
 
-                <Button 
-                  variant="secondary" 
+                <Button
+                  variant="secondary"
                   onClick={handleExportPDF}
                   data-testid="button-export-pdf"
                 >
@@ -197,7 +251,7 @@ export default function ReportPage() {
                   Export PDF
                 </Button>
 
-                <Button 
+                <Button
                   onClick={handleSave}
                   disabled={isUpdating || isCreating}
                   data-testid="button-save-report"
@@ -256,8 +310,8 @@ export default function ReportPage() {
 
               {/* Action Buttons */}
               <div className="flex flex-col sm:flex-row gap-4 pt-6 border-t">
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   className="flex-1"
                   onClick={handleSave}
                   disabled={isUpdating || isCreating}
@@ -267,8 +321,8 @@ export default function ReportPage() {
                   Save as Draft
                 </Button>
 
-                <Button 
-                  variant="secondary" 
+                <Button
+                  variant="secondary"
                   className="flex-1"
                   onClick={handleExportPDF}
                   data-testid="button-preview-report"
@@ -277,7 +331,7 @@ export default function ReportPage() {
                   Preview Report
                 </Button>
 
-                <Button 
+                <Button
                   className="flex-1"
                   onClick={handleSubmit}
                   disabled={isUpdating || isCreating}
