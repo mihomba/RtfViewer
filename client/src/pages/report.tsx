@@ -155,10 +155,10 @@ export default function ReportPage() {
 
   return (
     <SidebarProvider style={style as React.CSSProperties}>
-      <div className="flex h-screen w-full">
+      <div className="main-container flex h-screen">
         <AppSidebar currentSection={currentSection} onSectionChange={setCurrentSection} />
         
-        <div className="flex flex-col flex-1">
+        <div className="content-wrapper flex flex-col">
           {/* Header */}
           <header className="bg-card shadow-sm border-b sticky top-0 z-50">
             <div className="flex justify-between items-center h-16 px-6">
@@ -205,8 +205,8 @@ export default function ReportPage() {
           </header>
 
           {/* Main Content */}
-          <main className="flex-1 overflow-y-auto p-6">
-            <div className="max-w-4xl mx-auto space-y-6">
+          <main className="flex-1 overflow-y-auto overflow-x-hidden p-6">
+            <div className="w-full max-w-4xl mx-auto space-y-6">
               <GeneralInfoSection
                 data={reportData.generalInfo!}
                 onChange={(data) => updateSection('generalInfo', data)}
