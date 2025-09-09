@@ -18,7 +18,7 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen gradient-bg">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="mb-8">
@@ -71,7 +71,7 @@ export default function Home() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {reports.map((report) => (
-                <Card key={report.id} className="hover-elevate">
+                <Card key={report.id} className="hover-elevate card-gradient border-0 shadow-lg">
                   <CardHeader>
                     <CardTitle className="flex items-center justify-between">
                       <span className="truncate">{report.generalInfo.branchName}</span>
