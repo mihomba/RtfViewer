@@ -1,0 +1,2337 @@
+{\rtf1\ansi\ansicpg1252\deff0\nouicompat\deflang1033{\fonttbl{\f0\fnil\fcharset0 Calibri;}}
+{\colortbl ;\red0\green0\blue255;}
+{\*\generator Riched20 10.0.19041}\viewkind4\uc1 
+\pard\sa200\sl276\slmult1\f0\fs22\lang9 import React, \{ useState, useEffect, useRef \} from 'react';\par
+import \{ initializeApp \} from 'firebase/app';\par
+import \{ getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged \} from 'firebase/auth';\par
+import \{ getFirestore, doc, setDoc, getDoc, collection, query, onSnapshot \} from 'firebase/firestore';\par
+\par
+// Your actual Firebase configuration you copied from the Firebase Console:\par
+// These variables are provided by the Canvas environment.\par
+const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '\{\}');\par
+const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;\par
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';\par
+\par
+\par
+// Initialize Firebase\par
+let app;\par
+let db;\par
+let auth;\par
+\par
+try \{\par
+  app = initializeApp(firebaseConfig);\par
+  db = getFirestore(app);\par
+  auth = getAuth(app);\par
+\} catch (error) \{\par
+  console.error("Firebase initialization error:", error);\par
+\}\par
+\par
+// Helper to generate unique IDs for sections\par
+const generateUniqueId = () => crypto.randomUUID();\par
+\par
+// Helper to get base title (without number prefix) - This remains a fixed source\par
+const getBaseTitle = (sectionType) => \{\par
+  const fixedBaseTitles = \{\par
+    generalMembership: 'General Membership',\par
+    youthAndChildrenProgram: 'Youth and Children\\'s Program',\par
+    bibleStudies: 'Bible Studies',\par
+    layActivities: 'Lay Activities (e.g. Branch S. School, Youth Outreach)',\par
+    specialDivineServices: 'Special Divine Services/Meetings/Highlights',\par
+    ministerialEldershipSupport: 'Ministerial & Eldership Support/Visit',\par
+    visitationPrograms: 'Visitation Programs',\par
+    prayerWalksConducted: 'Prayer Walks Converted',\par
+    womensMinistriesActivities: 'Women\\'s Ministries Activities',\par
+    offeringsFinance: 'Offerings & Finance',\par
+    facilitiesLogistics: 'Facilities & Logistics',\par
+    challengesRecommendations: 'Challenges & Recommendations',\par
+    acknowledgments: 'Acknowledgments',\par
+    summaryNextSteps: 'Summary & Next Steps',\par
+    customSection: 'New Custom Section', // Default for custom sections\par
+    generalInfo: 'General Information',\par
+    branchCellLeaders: 'Branch/Cell Leaders',\par
+    additionalPhotos: 'Additional Photos',\par
+  \};\par
+  return fixedBaseTitles[sectionType] || sectionType.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());\par
+\};\par
+\par
+// Default data for each section type\par
+const defaultSectionData = \{\par
+  generalInfo: () => ([\par
+    \{ id: generateUniqueId(), label: 'Branch Church Name:', value: '', type: 'text' \},\par
+    \{ id: generateUniqueId(), label: 'Reporting Area:', value: '', type: 'text' \},\par
+    \{ id: generateUniqueId(), label: 'Reporting Quarter:', value: '', type: 'text' \},\par
+    \{ id: generateUniqueId(), label: 'Reporting Leader Name:', value: '', type: 'text' \},\par
+    \{ id: generateUniqueId(), label: 'Position:', value: '', type: 'text' \},\par
+    \{ id: generateUniqueId(), label: 'Date Submitted:', value: '', type: 'date' \},\par
+  ]),\par
+  generalMembership: () => ([\par
+    \{ id: generateUniqueId(), label: 'Total Active Sabbath School Members:', value: '', type: 'number' \},\par
+    \{ id: generateUniqueId(), label: 'New Members This Quarter:', value: '', type: 'number' \},\par
+    \{ id: generateUniqueId(), label: 'Inactive Members (reasons if known):', value: '', type: 'textarea' \},\par
+    \{ id: generateUniqueId(), label: 'New Baptism Candidates:', value: '', type: 'number' \},\par
+    \{ id: generateUniqueId(), label: 'Member Relocations / Transfers:', value: '', type: 'textarea' \},\par
+    \{ id: generateUniqueId(), label: 'New Interests:', value: '', type: 'number' \},\par
+  ]),\par
+  youthAndChildrenProgram: () => ([\{ // Array of activities\par
+    id: generateUniqueId(),\par
+    photos: [], // Photos remain at the item level\par
+    fields: [\par
+      \{ id: generateUniqueId(), label: 'Date:', value: '', type: 'date' \},\par
+      \{ id: generateUniqueId(), label: 'Kids/Youth Activities Conducted:', value: '', type: 'textarea' \},\par
+      \{ id: generateUniqueId(), label: 'No. of Involved:', value: '', type: 'number' \},\par
+      \{ id: generateUniqueId(), label: 'Number/Details:', value: '', type: 'textarea' \},\par
+      \{ id: generateUniqueId(), label: 'Training Needs - Details:', value: '', type: 'textarea' \},\par
+    ]\par
+  \}]),\par
+  bibleStudies: () => ([\{ // Array of studies\par
+    id: generateUniqueId(),\par
+    photos: [],\par
+    fields: [\par
+      \{ id: generateUniqueId(), label: 'Frequency:', value: '', type: 'text' \},\par
+      \{ id: generateUniqueId(), label: 'Teacher(s):', value: '', type: 'text' \},\par
+      \{ id: generateUniqueId(), label: 'Topics Covered:', value: '', type: 'textarea' \},\par
+      \{ id: generateUniqueId(), label: 'Attendance:', value: '', type: 'number' \},\par
+    ]\par
+  \}]),\par
+  layActivities: () => ([\{ // Array of activities\par
+    id: generateUniqueId(),\par
+    photos: [],\par
+    fields: [\par
+      \{ id: generateUniqueId(), label: 'Date:', value: '', type: 'date' \},\par
+      \{ id: generateUniqueId(), label: 'Description of Activity:', value: '', type: 'textarea' \},\par
+      \{ id: generateUniqueId(), label: 'Participants:', value: '', type: 'number' \},\par
+      \{ id: generateUniqueId(), label: 'Results / Impact:', value: '', type: 'textarea' \},\par
+    ]\par
+  \}]),\par
+  specialDivineServices: () => ([\{ // Array of services\par
+    id: generateUniqueId(),\par
+    photos: [],\par
+    fields: [\par
+      \{ id: generateUniqueId(), label: 'Date:', value: '', type: 'date' \},\par
+      \{ id: generateUniqueId(), label: 'DS Worship/Meetings/Highlights:', value: '', type: 'textarea' \},\par
+      \{ id: generateUniqueId(), label: 'Guest Speaker(s) / Highlights:', value: '', type: 'textarea' \},\par
+    ]\par
+  \}]),\par
+  ministerialEldershipSupport: () => ([\par
+    \{ id: generateUniqueId(), label: 'Support/Visits received from Main Church:', value: '', type: 'textarea' \},\par
+    \{ id: generateUniqueId(), label: 'Support/Visits received from Branch Church (This is only to be filled by cell churches):', value: '', type: 'textarea' \},\par
+    \{ id: generateUniqueId(), label: 'Ministerial Visits:', value: '', type: 'textarea' \},\par
+    \{ id: generateUniqueId(), label: 'Challenges in spiritual leadership (if any):', value: '', type: 'textarea' \},\par
+  ]),\par
+  visitationPrograms: () => ([\{ // Array of programs\par
+    id: generateUniqueId(),\par
+    photos: [],\par
+    fields: [\par
+      \{ id: generateUniqueId(), label: 'Date:', value: '', type: 'date' \},\par
+      \{ id: generateUniqueId(), label: 'No. of Visits:', value: '', type: 'number' \},\par
+      \{ id: generateUniqueId(), label: 'Nature of Visit:', value: '', type: 'textarea' \},\par
+      \{ id: generateUniqueId(), label: 'Special Needs / Follow-ups Noted:', value: '', type: 'textarea' \},\par
+    ]\par
+  \}]),\par
+  prayerWalksConducted: () => ([\{ // Array of walks\par
+    id: generateUniqueId(),\par
+    photos: [],\par
+    fields: [\par
+      \{ id: generateUniqueId(), label: 'Frequency:', value: '', type: 'text' \},\par
+      \{ id: generateUniqueId(), label: 'Location:', value: '', type: 'text' \},\par
+      \{ id: generateUniqueId(), label: 'Participants:', value: '', type: 'number' \},\par
+      \{ id: generateUniqueId(), label: 'Outcomes/Testimonies:', value: '', type: 'textarea' \},\par
+    ]\par
+  \}]),\par
+  womensMinistriesActivities: () => ([\{ // Array of activities\par
+    id: generateUniqueId(),\par
+    photos: [],\par
+    fields: [\par
+      \{ id: generateUniqueId(), label: 'Date:', value: '', type: 'date' \},\par
+      \{ id: generateUniqueId(), label: 'Fellowship Meetings / Outreach Conducted:', value: '', type: 'textarea' \},\par
+      \{ id: generateUniqueId(), label: 'Attendance:', value: '', type: 'number' \},\par
+      \{ id: generateUniqueId(), label: 'Details:', value: '', type: 'textarea' \},\par
+    ]\par
+  \}]),\par
+  offeringsFinance: () => ([\par
+    \{ id: generateUniqueId(), label: 'Total Offerings Collected:', value: '', type: 'number' \},\par
+    \{ id: generateUniqueId(), label: 'Transferred to Main Church (Yes/No):', value: '', type: 'text' \},\par
+    \{ id: generateUniqueId(), label: 'If yes, then how much Transferred:', value: '', type: 'number' \},\par
+    \{ id: generateUniqueId(), label: 'Special Projects/Needs:', value: '', type: 'textarea' \},\par
+    \{ id: generateUniqueId(), label: 'Donations/Pledges Made:', value: '', type: 'textarea' \},\par
+    \{ id: generateUniqueId(), label: 'Summary of Needs Next Quarter:', value: '', type: 'textarea' \},\par
+    \{ id: generateUniqueId(), label: 'If no normal Offering Collection Indicate reason:', value: '', type: 'textarea' \},\par
+  ]),\par
+  facilitiesLogistics: () => ([\par
+    \{ id: generateUniqueId(), label: 'Worship Venue Condition:', value: '', type: 'textarea' \},\par
+    \{ id: generateUniqueId(), label: 'Equipment Needs (chairs, tents, etc.):', value: '', type: 'textarea' \},\par
+    \{ id: generateUniqueId(), label: 'Land or Property Progress:', value: '', type: 'textarea' \},\par
+    \{ id: generateUniqueId(), label: 'Challenges in Logistics:', value: '', type: 'textarea' \},\par
+  ]),\par
+  challengesRecommendations: () => ([\par
+    \{ id: generateUniqueId(), label: 'Main Challenges:', value: '', type: 'textarea' \},\par
+    \{ id: generateUniqueId(), label: 'Suggestions for Improvement:', value: '', type: 'textarea' \},\par
+    \{ id: generateUniqueId(), label: 'Support needed from Church Board/Ministers:', value: '', type: 'textarea' \},\par
+  ]),\par
+  acknowledgments: () => ([\par
+    \{ id: generateUniqueId(), label: 'Recognition of Help Received:', value: '', type: 'textarea' \},\par
+    \{ id: generateUniqueId(), label: 'Member Contributions Worth Noting:', value: '', type: 'textarea' \},\par
+    \{ id: generateUniqueId(), label: 'Encouraging Testimonies or Answered Prayers:', value: '', type: 'textarea' \},\par
+  ]),\par
+  summaryNextSteps: () => ([\par
+    \{ id: generateUniqueId(), label: 'Summary of Spiritual Health:', value: '', type: 'textarea' \},\par
+    \{ id: generateUniqueId(), label: 'Goals for Next Quarter:', value: '', type: 'textarea' \},\par
+    \{ id: generateUniqueId(), label: 'Planned Activities:', value: '', type: 'textarea' \},\par
+    \{ id: generateUniqueId(), label: 'Summary Comment (optional):', value: '', type: 'textarea' \},\par
+  ]),\par
+  additionalPhotos: () => ([\{ // Array of photo slots - NO custom fields here, not a content section\par
+    id: generateUniqueId(),\par
+    photos: [],\par
+  \}]),\par
+  customSection: () => ([\{ // Already has fields, so this is consistent\par
+    id: generateUniqueId(),\par
+    fields: [\par
+      \{ id: generateUniqueId(), label: 'Custom Field 1:', value: '', type: 'text' \},\par
+    ],\par
+    photos: [],\par
+  \}]),\par
+  branchCellLeaders: () => (\{\par
+    fields: [\par
+      \{ id: generateUniqueId(), label: 'Elder:', value: '', type: 'text' \},\par
+      \{ id: generateUniqueId(), label: 'Contact:', value: '', type: 'text' \}, // For Elder contact\par
+      \{ id: generateUniqueId(), label: 'Report Submitted By:', value: '', type: 'text' \},\par
+      \{ id: generateUniqueId(), label: 'Contact:', value: '', type: 'text' \}, // For Report Submitted By contact\par
+    ],\par
+    // This defines the fixed set of columns and their default labels for the "Other Leaders" table\par
+    otherLeadersColumnTemplate: [\par
+      \{ id: generateUniqueId(), label: 'Name:', type: 'text' \},\par
+      \{ id: generateUniqueId(), label: 'Position:', type: 'text' \},\par
+      \{ id: generateUniqueId(), label: 'Contact:', type: 'text' \},\par
+    ],\par
+    otherLeaders: [], // Start empty. New leaders will copy the template.\par
+  \}),\par
+\};\par
+\par
+const App = () => \{\par
+  const [reportData, setReportData] = useState(() => \{\par
+    const initialBranchCellLeaders = defaultSectionData.branchCellLeaders();\par
+    // Ensure otherLeaders has at least one entry for PDF rendering to avoid errors\par
+    if (initialBranchCellLeaders.otherLeaders.length === 0) \{\par
+      initialBranchCellLeaders.otherLeaders.push(\{\par
+        id: generateUniqueId(),\par
+        fields: initialBranchCellLeaders.otherLeadersColumnTemplate.map(field => (\{ ...field, value: '' \}))\par
+      \});\par
+    \}\par
+\par
+    return \{\par
+      // Fixed top-level general info - now uses dynamic fields\par
+      generalInfo: defaultSectionData.generalInfo(),\par
+      // Fixed branch/cell leaders info - now uses dynamic fields\par
+      branchCellLeaders: initialBranchCellLeaders,\par
+      // Dynamic sections array - now includes userDefinedBaseTitle\par
+      sections: [\par
+        \{ id: generateUniqueId(), type: 'generalMembership', data: defaultSectionData.generalMembership(), userDefinedBaseTitle: getBaseTitle('generalMembership') \},\par
+        \{ id: generateUniqueId(), type: 'youthAndChildrenProgram', data: defaultSectionData.youthAndChildrenProgram(), userDefinedBaseTitle: getBaseTitle('youthAndChildrenProgram') \},\par
+        \{ id: generateUniqueId(), type: 'bibleStudies', data: defaultSectionData.bibleStudies(), userDefinedBaseTitle: getBaseTitle('bibleStudies') \},\par
+        \{ id: generateUniqueId(), type: 'layActivities', data: defaultSectionData.layActivities(), userDefinedBaseTitle: getBaseTitle('layActivities') \},\par
+        \{ id: generateUniqueId(), type: 'specialDivineServices', data: defaultSectionData.specialDivineServices(), userDefinedBaseTitle: getBaseTitle('specialDivineServices') \},\par
+        \{ id: generateUniqueId(), type: 'ministerialEldershipSupport', data: defaultSectionData.ministerialEldershipSupport(), userDefinedBaseTitle: getBaseTitle('ministerialEldershipSupport') \},\par
+        \{ id: generateUniqueId(), type: 'visitationPrograms', data: defaultSectionData.visitationPrograms(), userDefinedBaseTitle: getBaseTitle('visitationPrograms') \},\par
+        \{ id: generateUniqueId(), type: 'prayerWalksConducted', data: defaultSectionData.prayerWalksConducted(), userDefinedBaseTitle: getBaseTitle('prayerWalksConducted') \},\par
+        \{ id: generateUniqueId(), type: 'womensMinistriesActivities', data: defaultSectionData.womensMinistriesActivities(), userDefinedBaseTitle: getBaseTitle('womensMinistriesActivities') \},\par
+        \{ id: generateUniqueId(), type: 'offeringsFinance', data: defaultSectionData.offeringsFinance(), userDefinedBaseTitle: getBaseTitle('offeringsFinance') \},\par
+        \{ id: generateUniqueId(), type: 'facilitiesLogistics', data: defaultSectionData.facilitiesLogistics(), userDefinedBaseTitle: getBaseTitle('facilitiesLogistics') \},\par
+        \{ id: generateUniqueId(), type: 'challengesRecommendations', data: defaultSectionData.challengesRecommendations(), userDefinedBaseTitle: getBaseTitle('challengesRecommendations') \},\par
+        \{ id: generateUniqueId(), type: 'acknowledgments', data: defaultSectionData.acknowledgments(), userDefinedBaseTitle: getBaseTitle('acknowledgments') \},\par
+        \{ id: generateUniqueId(), type: 'summaryNextSteps', data: defaultSectionData.summaryNextSteps(), userDefinedBaseTitle: getBaseTitle('summaryNextSteps') \},\par
+        \{ id: generateUniqueId(), type: 'additionalPhotos', data: defaultSectionData.additionalPhotos(), userDefinedBaseTitle: getBaseTitle('additionalPhotos') \},\par
+      ],\par
+      // General titles/messages - these remain fixed for now\par
+      generalLabels: \{\par
+        mainTitle: 'Quarterly Report Form',\par
+        userIdLabel: 'User ID:',\par
+        loadDeleteLabel: 'Load/Delete Saved Report:',\par
+        selectReportOption: '-- Select a Report --',\par
+        loadButton: 'Load Report',\par
+        deleteButton: 'Delete Report',\par
+        saveButton: 'Save Current Report',\par
+        generatePdfButton: 'Generate PDF',\par
+        generatingPdfButton: 'Generating PDF...',\par
+        saveSuccess: 'Report saved successfully!',\par
+        loadSuccess: 'Report loaded successfully!',\par
+        deleteSuccess: 'Report deleted successfully!',\par
+        confirmDelete: 'Are you sure you want to delete this report?',\par
+        yesDelete: 'Yes, Delete',\par
+        cancel: 'Cancel',\par
+        addActivity: 'Add Activity', // For youth program etc.\par
+        remove: 'Remove', // For rows in array sections\par
+        addBibleStudy: 'Add Bible Study',\par
+        addLayActivity: 'Add Activity',\par
+        addServiceMeeting: 'Add Service/Meeting',\par
+        addVisitationProgram: 'Add Visitation Program',\par
+        addPrayerWalk: 'Add Prayer Walk',\par
+        addWomensMinistryActivity: 'Add Women\\'s Ministry Activity',\par
+        addOtherLeader: 'Add Other Leader', // For branch cell leaders\par
+        addPhotoSlot: 'Add Photo Slot',\par
+        addField: 'Add Field', // For adding fields within any section/item\par
+        removeField: 'Remove Field', // For removing fields within any section/item\par
+        addItem: 'Add Item', // New label for array-based sections\par
+        noYouthActivities: 'No youth and children\\'s program activities recorded.',\par
+        noBibleStudies: 'No Bible studies recorded.',\par
+        noLayActivities: 'No lay activities recorded.',\par
+        noSpecialServices: 'No special divine services/meetings/highlights recorded.',\par
+        noVisitationPrograms: 'No visitation programs recorded.',\par
+        noPrayerWalks: 'No prayer walks conducted.',\par
+        noWomensActivities: 'No women\\'s ministries activities recorded.',\par
+        noOtherLeaders: 'No other leaders recorded.',\par
+        noPhotosUploaded: 'No photos uploaded for this section.',\par
+        noAdditionalPhotos: 'No additional photos uploaded.',\par
+        noCustomItems: 'No custom items recorded.',\par
+        seePhotosBelow: 'See photos below;',\par
+        footerText: '"Therefore, my dear brothers and sisters, stand firm. Let nothing move you. Always give yourselves fully to the work of the Lord, because you know that your labor in the Lord is not in vain." - 1 Corinthians 15:58',\par
+        additionalPhotosInstruction: 'Attach additional photos or supporting documents if needed. If no photos, then simply make a note or leave it as blank in the photo slots.', // Moved here\par
+        slotTitle: 'Photo Slot', // Moved here\par
+        upload: 'Upload Photo(s) (Max 4):', // Moved here\par
+        otherLeadersTableTitle: 'Other Leaders (Indicate Name and Position)', // Moved here\par
+        itemTitle: 'Item', // Added for custom section item title\par
+      \},\par
+    \};\par
+  \});\par
+\par
+  const [userId, setUserId] = useState(null);\par
+  const [isAuthReady, setIsAuthReady] = useState(false);\par
+  const [savedReports, setSavedReports] = useState([]);\par
+  const [selectedReportId, setSelectedReportId] = useState('');\par
+  const [showSaveSuccess, setShowSaveSuccess] = useState(false);\par
+  const [showLoadSuccess, setShowLoadSuccess] = useState(false);\par
+  const [showDeleteSuccess, setShowDeleteSuccess] = useState(false);\par
+  const [showConfirmModal, setShowConfirmModal] = useState(false);\par
+  const [reportToDelete, setReportToDelete] = useState(null);\par
+  const [isHtml2PdfLoaded, setIsHtml2PdfLoaded] = useState(false);\par
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);\par
+  const pdfContentRef = useRef(null);\par
+\par
+  // Effect to load html2pdf.js dynamically\par
+  useEffect(() => \{\par
+    const script = document.createElement('script');\par
+    script.src = '{{\field{\*\fldinst{HYPERLINK https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js }}{\fldrslt{https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js\ul0\cf0}}}}\f0\fs22 ';\par
+    script.onload = () => \{\par
+      setIsHtml2PdfLoaded(true);\par
+      console.log("html2pdf.js loaded successfully.");\par
+    \};\par
+    script.onerror = () => \{\par
+      console.error("Failed to load html2pdf.js");\par
+    \};\par
+    document.body.appendChild(script);\par
+\par
+    return () => \{\par
+      if (document.body.contains(script)) \{\par
+        document.body.removeChild(script);\par
+      \}\par
+    \};\par
+  \}, []);\par
+\par
+  useEffect(() => \{\par
+    if (!auth) \{\par
+      console.error("Firebase Auth not initialized.");\par
+      return;\par
+    \}\par
+\par
+    const unsubscribe = onAuthStateChanged(auth, async (user) => \{\par
+      if (user) \{\par
+        setUserId(user.uid);\par
+      \} else \{\par
+        try \{\par
+          // Use the global initialAuthToken\par
+          if (initialAuthToken) \{\par
+            await signInWithCustomToken(auth, initialAuthToken);\par
+          \} else \{\par
+            await signInAnonymously(auth);\par
+          \}\par
+          setUserId(auth.currentUser?.uid || crypto.randomUUID());\par
+        \} catch (error) \{\par
+          console.error("Firebase authentication error:", error);\par
+          setUserId(crypto.randomUUID());\par
+        \}\par
+      \}\par
+      setIsAuthReady(true);\par
+    \});\par
+\par
+    return () => unsubscribe();\par
+  \}, []);\par
+\par
+  useEffect(() => \{\par
+    if (isAuthReady && userId && db) \{\par
+      const reportsCollectionRef = collection(db, `artifacts/$\{appId\}/users/$\{userId\}/reports`);\par
+      const q = query(reportsCollectionRef);\par
+\par
+      const unsubscribe = onSnapshot(q, (snapshot) => \{\par
+        const reports = snapshot.docs.map(doc => (\{ id: doc.id, ...doc.data() \}));\par
+        setSavedReports(reports);\par
+      \}, (error) => \{\par
+        console.error("Error fetching saved reports:", error);\par
+      \});\par
+\par
+      return () => unsubscribe();\par
+    \}\par
+  \}, [isAuthReady, userId, db]);\par
+\par
+  // Initial numbering when component mounts or reportData.sections changes\par
+  useEffect(() => \{\par
+    reapplySectionNumbering();\par
+  \}, [reportData.sections.length]); // Re-apply if section count changes\par
+\par
+  // Function to re-apply sequential numbering to sections\par
+  const reapplySectionNumbering = () => \{\par
+    setReportData(prevData => \{\par
+      let currentSections = [...prevData.sections];\par
+\par
+      // Separate "Additional Photos" to ensure it's always last and unnumbered\par
+      const additionalPhotosIndex = currentSections.findIndex(s => s.type === 'additionalPhotos');\par
+      let additionalPhotosSection = null;\par
+      if (additionalPhotosIndex !== -1) \{\par
+        [additionalPhotosSection] = currentSections.splice(additionalPhotosIndex, 1);\par
+      \}\par
+\par
+      // Apply numbering to all other sections\par
+      const numberedSections = currentSections.map((s, idx) => \{\par
+        // Use userDefinedBaseTitle if available, otherwise get from fixed source\par
+        const actualBaseTitle = s.userDefinedBaseTitle || getBaseTitle(s.type);\par
+        return \{ ...s, title: `$\{idx + 1\}. $\{actualBaseTitle\}` \};\par
+      \});\par
+\par
+      // Re-add "Additional Photos" at the end with its fixed title\par
+      if (additionalPhotosSection) \{\par
+        numberedSections.push(\{ ...additionalPhotosSection, title: additionalPhotosSection.userDefinedBaseTitle \});\par
+      \}\par
+\par
+      return \{ ...prevData, sections: numberedSections \};\par
+    \});\par
+  \};\par
+\par
+  // Handle changes for dynamic fields (value)\par
+  const handleFieldValueChange = (sectionKey, fieldId, newValue, itemIndex = null) => \{\par
+    setReportData(prevData => \{\par
+      let updatedData = \{ ...prevData \};\par
+\par
+      if (sectionKey === 'generalInfo') \{\par
+        updatedData.generalInfo = updatedData.generalInfo.map(field =>\par
+          field.id === fieldId ? \{ ...field, value: newValue \} : field\par
+        );\par
+      \} else if (sectionKey === 'branchCellLeaders') \{\par
+        // Handle fields within branchCellLeaders directly\par
+        updatedData.branchCellLeaders.fields = updatedData.branchCellLeaders.fields.map(field =>\par
+          field.id === fieldId ? \{ ...field, value: newValue \} : field\par
+        );\par
+      \} else if (sectionKey === 'otherLeaders') \{\par
+        // Handle fields within otherLeaders array (for values)\par
+        updatedData.branchCellLeaders.otherLeaders = updatedData.branchCellLeaders.otherLeaders.map((leader, idx) => \{\par
+          if (idx === itemIndex) \{\par
+            return \{\par
+              ...leader,\par
+              fields: leader.fields.map(field =>\par
+                field.id === fieldId ? \{ ...field, value: newValue \} : field\par
+              )\par
+            \};\par
+          \}\par
+          return leader;\par
+        \});\par
+      \} else \{\par
+        // Handle fields within dynamic sections\par
+        updatedData.sections = updatedData.sections.map(section => \{\par
+          if (section.id === sectionKey) \{ // sectionKey is actually section.id here\par
+            // If section data is an array of items (like youth program, custom section)\par
+            if (Array.isArray(section.data) && section.data[0] && 'fields' in section.data[0]) \{\par
+              return \{\par
+                ...section,\par
+                data: section.data.map((item, idx) =>\par
+                  idx === itemIndex\par
+                    ? \{\par
+                        ...item,\par
+                        fields: item.fields.map(field =>\par
+                          field.id === fieldId ? \{ ...field, value: newValue \} : field\par
+                        ),\par
+                      \}\par
+                    : item\par
+                ),\par
+              \};\par
+            \} else \{ // If section data is directly an array of fields (like general membership)\par
+              return \{\par
+                ...section,\par
+                data: section.data.map(field =>\par
+                  field.id === fieldId ? \{ ...field, value: newValue \} : field\par
+                ),\par
+              \};\par
+            \}\par
+          \}\par
+          return section;\par
+        \});\par
+      \}\par
+      return updatedData;\par
+    \});\par
+  \};\par
+\par
+  // Handle changes for dynamic fields (label)\par
+  const handleFieldLabelChange = (sectionKey, fieldId, newLabel, itemIndex = null) => \{\par
+    setReportData(prevData => \{\par
+      let updatedData = \{ ...prevData \};\par
+\par
+      if (sectionKey === 'generalInfo') \{\par
+        updatedData.generalInfo = updatedData.generalInfo.map(field =>\par
+          field.id === fieldId ? \{ ...field, label: newLabel \} : field\par
+        );\par
+      \} else if (sectionKey === 'branchCellLeaders') \{\par
+        updatedData.branchCellLeaders.fields = updatedData.branchCellLeaders.fields.map(field =>\par
+          field.id === fieldId ? \{ ...field, label: newLabel \} : field\par
+        );\par
+      \} else if (sectionKey === 'otherLeadersColumnTemplate') \{ // NEW: For editing column headers\par
+        updatedData.branchCellLeaders.otherLeadersColumnTemplate = updatedData.branchCellLeaders.otherLeadersColumnTemplate.map(field =>\par
+          field.id === fieldId ? \{ ...field, label: newLabel \} : field\par
+        );\par
+        // Also update labels in existing otherLeaders data to reflect the column template change\par
+        updatedData.branchCellLeaders.otherLeaders = updatedData.branchCellLeaders.otherLeaders.map(leader => (\{\par
+          ...leader,\par
+          fields: leader.fields.map(field =>\par
+            field.id === fieldId ? \{ ...field, label: newLabel \} : field\par
+          )\par
+        \}));\par
+      \} else if (sectionKey === 'generalLabels') \{ // Handle generalLabels directly\par
+        updatedData.generalLabels = \{\par
+          ...updatedData.generalLabels,\par
+          [fieldId]: newLabel,\par
+        \};\par
+      \}\par
+      else \{\par
+        updatedData.sections = updatedData.sections.map(section => \{\par
+          if (section.id === sectionKey) \{ // sectionKey is actually section.id here\par
+            if (Array.isArray(section.data) && section.data[0] && 'fields' in section.data[0]) \{\par
+              return \{\par
+                ...section,\par
+                data: section.data.map((item, idx) =>\par
+                  idx === itemIndex\par
+                    ? \{\par
+                        ...item,\par
+                        fields: item.fields.map(field =>\par
+                          field.id === fieldId ? \{ ...field, label: newLabel \} : field\par
+                        ),\par
+                      \}\par
+                    : item\par
+                ),\par
+              \};\par
+            \} else \{\par
+              return \{\par
+                ...section,\par
+                data: section.data.map(field =>\par
+                  field.id === fieldId ? \{ ...field, label: newLabel \} : field\par
+                ),\par
+              \};\par
+            \}\par
+          \}\par
+          return section;\par
+        \});\par
+      \}\par
+      return updatedData;\par
+    \});\par
+  \};\par
+\par
+  // Add a new row/item to array-based sections (e.g., add a new activity to Youth Program, or a new item to Custom Section)\par
+  const addRow = (sectionId, sectionType) => \{\par
+    setReportData(prevData => (\{\par
+      ...prevData,\par
+      sections: prevData.sections.map(section =>\par
+        section.id === sectionId && section.type === sectionType\par
+          ? \{ ...section, data: [...section.data, defaultSectionData[sectionType]()[0]] \} // Get a default item structure\par
+          : section\par
+      ),\par
+    \}));\par
+  \};\par
+\par
+  // Remove a row/item from array-based sections\par
+  const removeRow = (sectionId, sectionType, index) => \{\par
+    setReportData(prevData => (\{\par
+      ...prevData,\par
+      sections: prevData.sections.map(section =>\par
+        section.id === sectionId && section.type === sectionType\par
+          ? \{\par
+              ...section,\par
+              data: section.data.filter((_, idx) => idx !== index),\par
+            \}\par
+          : section\par
+      ),\par
+    \}));\par
+  \};\par
+\par
+  // Add a new dynamic field to a section or an item within a section\par
+  const addFieldToSection = (sectionKey, itemIndex = null, fieldType = 'text') => \{\par
+    setReportData(prevData => \{\par
+      let updatedData = \{ ...prevData \};\par
+      const newField = \{ id: generateUniqueId(), label: 'New Field:', value: '', type: fieldType \};\par
+\par
+      if (sectionKey === 'generalInfo') \{\par
+        // Find the index of 'Date Submitted:'\par
+        const dateSubmittedIndex = updatedData.generalInfo.findIndex(field => field.label === 'Date Submitted:');\par
+        if (dateSubmittedIndex !== -1) \{\par
+          // Insert the new field right before 'Date Submitted:'\par
+          updatedData.generalInfo.splice(dateSubmittedIndex, 0, newField);\par
+        \} else \{\par
+          // Fallback: add to the end if 'Date Submitted:' not found (shouldn't happen with default structure)\par
+          updatedData.generalInfo = [...updatedData.generalInfo, newField];\par
+        \}\par
+      \} else if (sectionKey === 'branchCellLeaders') \{\par
+        updatedData.branchCellLeaders.fields = [...updatedData.branchCellLeaders.fields, newField];\par
+      \} else \{ // For dynamic sections (sections array)\par
+        updatedData.sections = updatedData.sections.map(section => \{\par
+          if (section.id === sectionKey) \{\par
+            if (Array.isArray(section.data) && section.data[0] && 'fields' in section.data[0]) \{\par
+              // Section with array of items, add field to specific item\par
+              return \{\par
+                ...section,\par
+                data: section.data.map((item, idx) =>\par
+                  idx === itemIndex ? \{ ...item, fields: [...item.fields, newField] \} : item\par
+                ),\par
+              \};\par
+            \} else \{\par
+              // Section with array of fields directly\par
+              return \{\par
+                ...section,\par
+                data: [...section.data, newField],\par
+              \};\par
+            \}\par
+          \}\par
+          return section;\par
+        \});\par
+      \}\par
+      return updatedData;\par
+    \});\par
+  \};\par
+\par
+  // Remove a dynamic field from a section or an item within a section\par
+  const removeFieldFromSection = (sectionKey, fieldIdToRemove, itemIndex = null) => \{\par
+    setReportData(prevData => \{\par
+      let updatedData = \{ ...prevData \};\par
+\par
+      if (sectionKey === 'generalInfo') \{\par
+        updatedData.generalInfo = updatedData.generalInfo.filter(field => field.id !== fieldIdToRemove);\par
+      \} else if (sectionKey === 'branchCellLeaders') \{\par
+        updatedData.branchCellLeaders.fields = updatedData.branchCellLeaders.fields.filter(field => field.id !== fieldIdToRemove);\par
+      \} else \{ // For dynamic sections (sections array)\par
+        updatedData.sections = updatedData.sections.map(section => \{\par
+          if (section.id === sectionKey) \{\par
+            if (Array.isArray(section.data) && section.data[0] && 'fields' in section.data[0]) \{\par
+              // Section with array of items, remove field from specific item\par
+              return \{\par
+                ...section,\par
+                data: section.data.map((item, idx) =>\par
+                  idx === itemIndex ? \{ ...item, fields: item.fields.filter(field => field.id !== fieldIdToRemove) \} : item\par
+                ),\par
+              \};\par
+            \} else \{\par
+              // Section with array of fields directly\par
+              return \{\par
+                ...section,\par
+                data: section.data.filter(field => field.id !== fieldIdToRemove),\par
+              \};\par
+            \}\par
+          \}\par
+          return section;\par
+        \});\par
+      \}\par
+      return updatedData;\par
+    \});\par
+  \};\par
+\par
+  const handleFileChange = (e, sectionId, itemIndex) => \{\par
+    const files = Array.from(e.target.files);\par
+    setReportData(prevData => (\{\par
+      ...prevData,\par
+      sections: prevData.sections.map(section => \{\par
+        if (section.id === sectionId && (section.type === 'additionalPhotos' || (section.data[itemIndex] && 'photos' in section.data[itemIndex]))) \{\par
+          const currentPhotos = section.data[itemIndex]?.photos || [];\par
+          const availableSlots = 4 - currentPhotos.length;\par
+\par
+          if (files.length === 0 || availableSlots === 0) return section;\par
+\par
+          let processedCount = 0;\par
+          const newPhotos = [];\par
+\par
+          files.slice(0, availableSlots).forEach(file => \{\par
+            const reader = new FileReader();\par
+            reader.onloadend = () => \{\par
+              newPhotos.push(reader.result);\par
+              processedCount++;\par
+              if (processedCount === Math.min(files.length, availableSlots)) \{\par
+                setReportData(prevInnerData => (\{\par
+                  ...prevInnerData,\par
+                  sections: prevInnerData.sections.map(innerSection =>\par
+                    innerSection.id === sectionId\par
+                      ? \{\par
+                          ...innerSection,\par
+                          data: innerSection.data.map((item, idx) =>\par
+                            idx === itemIndex ? \{ ...item, photos: [...currentPhotos, ...newPhotos] \} : item\par
+                          ),\par
+                        \}\par
+                      : innerSection\par
+                  ),\par
+                \}));\par
+              \}\par
+            \};\par
+            reader.readAsDataURL(file);\par
+          \});\par
+          return section; // Return current section state, actual update happens in reader.onloadend\par
+        \}\par
+        return section;\par
+      \}),\par
+    \}));\par
+  \};\par
+\par
+  const removePhotoFromSlot = (sectionId, itemIndex, photoIndexToRemove) => \{\par
+    setReportData(prevData => (\{\par
+      ...prevData,\par
+      sections: prevData.sections.map(section =>\par
+        section.id === sectionId\par
+          ? \{\par
+              ...section,\par
+              data: section.data.map((item, idx) => \{\par
+                if (idx === itemIndex) \{\par
+                  const currentPhotos = [...item.photos];\par
+                  currentPhotos.splice(photoIndexToRemove, 1);\par
+                  return \{ ...item, photos: currentPhotos \};\par
+                \}\par
+                return item;\par
+              \}),\par
+            \}\par
+          : section\par
+      ),\par
+    \}));\par
+  \};\par
+\par
+  const insertSection = (insertIndex, type = 'customSection') => \{\par
+    if (!defaultSectionData[type]) \{\par
+      console.error(`Unknown section type: $\{type\}`);\par
+      return;\par
+    \}\par
+\par
+    setReportData(prevData => \{\par
+      let newSections = [...prevData.sections];\par
+      const newSection = \{\par
+        id: generateUniqueId(),\par
+        type: type,\par
+        data: defaultSectionData[type](),\par
+        userDefinedBaseTitle: getBaseTitle(type), // Initialize userDefinedBaseTitle\par
+      \};\par
+\par
+      // Ensure "Additional Photos" is handled correctly at the end\par
+      const additionalPhotosIndex = newSections.findIndex(s => s.type === 'additionalPhotos');\par
+      let additionalPhotosSection = null;\par
+      if (additionalPhotosIndex !== -1) \{\par
+        [additionalPhotosSection] = newSections.splice(additionalPhotosIndex, 1);\par
+      \}\par
+\par
+      // Insert the new section at the specified index\par
+      newSections.splice(insertIndex, 0, newSection);\par
+\par
+      // Re-add "Additional Photos" to the end if it was removed\par
+      if (additionalPhotosSection) \{\par
+        newSections.push(additionalPhotosSection);\par
+      \}\par
+\par
+      return \{ ...prevData, sections: newSections \};\par
+    \});\par
+    reapplySectionNumbering(); // Ensure numbering is reapplied after insertion\par
+  \};\par
+\par
+  const removeSection = (idToRemove) => \{\par
+    setReportData(prevData => \{\par
+      let newSections = prevData.sections.filter(section => section.id !== idToRemove);\par
+\par
+      // Ensure "Additional Photos" is handled correctly at the end\par
+      const additionalPhotosIndex = newSections.findIndex(s => s.type === 'additionalPhotos');\par
+      let additionalPhotosSection = null;\par
+      if (additionalPhotosIndex !== -1) \{\par
+        [additionalPhotosSection] = newSections.splice(additionalPhotosIndex, 1);\par
+      \}\par
+\par
+      // Re-add "Additional Photos" to the end if it was removed\par
+      if (additionalPhotosSection) \{\par
+        newSections.push(additionalPhotosSection);\par
+      \}\par
+\par
+      return \{ ...prevData, sections: newSections \};\par
+    \});\par
+    reapplySectionNumbering(); // Ensure numbering is reapplied after removal\par
+  \};\par
+\par
+  const preloadImages = (data) => \{\par
+    const imageUrls = [];\par
+\par
+    data.sections.forEach(section => \{\par
+      // Check if it's an array of items (like youth program, bible studies, custom sections)\par
+      if (Array.isArray(section.data)) \{\par
+        section.data.forEach(item => \{\par
+          if (item.photos && Array.isArray(item.photos)) \{\par
+            item.photos.forEach(p => p && imageUrls.push(p));\par
+          \}\par
+          // Also check custom fields within array items for customSection only\par
+          if ('fields' in item && Array.isArray(item.fields)) \{\par
+            item.fields.forEach(field => \{\par
+              if (field.type === 'image' && field.value) imageUrls.push(field.value);\par
+            \});\par
+          \}\par
+        \});\par
+      \}\par
+    \});\par
+\par
+    // Check generalInfo and branchCellLeaders fields for images\par
+    [data.generalInfo, data.branchCellLeaders.fields].forEach(fieldArray => \{\par
+      if (Array.isArray(fieldArray)) \{\par
+        fieldArray.forEach(field => \{\par
+          if (field.type === 'image' && field.value) imageUrls.push(field.value);\par
+        \});\par
+      \}\par
+    \});\par
+    data.branchCellLeaders.otherLeaders.forEach(leader => \{\par
+      leader.fields.forEach(field => \{\par
+        if (field.type === 'image' && field.value) imageUrls.push(field.value);\par
+      \});\par
+    \});\par
+\par
+\par
+    const imagePromises = imageUrls.map(url => \{\par
+      return new Promise((resolve, reject) => \{\par
+        const img = new Image();\par
+        img.src = url;\par
+        img.onload = resolve;\par
+        img.onerror = reject;\par
+      \});\par
+    \});\par
+\par
+    return Promise.all(imagePromises);\par
+  \};\par
+\par
+  const generatePdf = async () => \{\par
+    if (!pdfContentRef.current || !isHtml2PdfLoaded) \{\par
+      console.error("PDF content ref not available or html2pdf library not yet loaded.");\par
+      return;\par
+    \}\par
+\par
+    setIsGeneratingPdf(true);\par
+\par
+    const pdfContainer = pdfContentRef.current;\par
+    const originalStyle = \{\par
+      position: pdfContainer.style.position,\par
+      opacity: pdfContainer.style.opacity,\par
+      zIndex: pdfContainer.style.zIndex,\par
+      left: pdfContainer.style.left,\par
+      top: pdfContainer.style.top,\par
+    \};\par
+\par
+    // Temporarily make the PDF container visible and positioned for rendering\par
+    pdfContainer.style.position = 'static';\par
+    pdfContainer.style.opacity = '1';\par
+    pdfContainer.style.zIndex = 'auto';\par
+    pdfContainer.style.left = 'auto';\par
+    pdfContainer.style.top = 'auto';\par
+\par
+    try \{\par
+      await preloadImages(reportData);\par
+      console.log("All images preloaded.");\par
+\par
+      const element = pdfContentRef.current;\par
+      const opt = \{\par
+        // Adjusted top margin to 0.75 to match the attached PDF\par
+        margin: [0.75, 0.75, 0.75, 0.8],\par
+        filename: `Quarterly_Report_$\{\par
+          reportData.generalInfo.find(field => field.label === 'Branch Church Name:')?.value || 'Untitled'\par
+        \}.pdf`,\par
+        image: \{ type: 'jpeg', quality: 0.98 \},\par
+        html2canvas: \{ scale: 2 \},\par
+        jsPDF: \{ unit: 'in', format: 'letter', orientation: 'portrait' \},\par
+      \};\par
+\par
+      // Give a small delay to ensure all styles are applied before rendering\par
+      await new Promise(resolve => setTimeout(resolve, 100));\par
+\par
+      if (typeof html2pdf !== 'undefined') \{\par
+        await html2pdf().from(element).set(opt).save();\par
+      \} else \{\par
+        console.error("html2pdf library not found globally after loading.");\par
+      \}\par
+    \} catch (error) \{\par
+      console.error("Error generating PDF:", error);\par
+    \} finally \{\par
+      // Revert styles after PDF generation\par
+      pdfContainer.style.position = originalStyle.position;\par
+      pdfContainer.style.opacity = originalStyle.opacity;\par
+      pdfContainer.style.zIndex = originalStyle.zIndex;\par
+      pdfContainer.style.left = originalStyle.left;\par
+      pdfContainer.style.top = originalStyle.top;\par
+      setIsGeneratingPdf(false);\par
+    \}\par
+  \};\par
+\par
+  const saveReport = async () => \{\par
+    if (!userId || !db) \{\par
+      console.error("User not authenticated or Firestore not initialized.");\par
+      return;\par
+    \}\par
+    try \{\par
+      const dataToSave = JSON.parse(JSON.stringify(reportData));\par
+      const reportDocRef = doc(db, `artifacts/$\{appId\}/users/$\{userId\}/reports`, selectedReportId || generateUniqueId());\par
+      await setDoc(reportDocRef, dataToSave);\par
+      setShowSaveSuccess(true);\par
+      setTimeout(() => setShowSaveSuccess(false), 3000);\par
+      setSelectedReportId(reportDocRef.id);\par
+    \} catch (e) \{\par
+      console.error("Error saving document: ", e);\par
+    \}\par
+  \};\par
+\par
+  const loadReport = async () => \{\par
+    if (!userId || !db || !selectedReportId) \{\par
+      console.error("User not authenticated, Firestore not initialized, or no report selected.");\par
+      return;\par
+    \}\par
+    try \{\par
+      const reportDocRef = doc(db, `artifacts/$\{appId\}/users/$\{userId\}/reports`, selectedReportId);\par
+      const docSnap = await getDoc(reportDocRef);\par
+      if (docSnap.exists()) \{\par
+        const loadedData = docSnap.data();\par
+        // Ensure all loaded sections and their fields have IDs\par
+        const ensureIds = (data) => \{\par
+          if (Array.isArray(data)) \{\par
+            return data.map(item => \{\par
+              const newItem = \{ ...item, id: item.id || generateUniqueId() \};\par
+              if (newItem.fields) \{\par
+                newItem.fields = ensureIds(newItem.fields);\par
+              \}\par
+              return newItem;\par
+            \});\par
+          \} else if (typeof data === 'object' && data !== null) \{\par
+            const newObject = \{ ...data \};\par
+            if (newObject.fields) \{\par
+              newObject.fields = ensureIds(newObject.fields);\par
+            \}\par
+            if (newObject.otherLeaders) \{ // Ensure otherLeaders items have IDs\par
+              newObject.otherLeaders = ensureIds(newObject.otherLeaders);\par
+            \}\par
+            if (newObject.otherLeadersColumnTemplate) \{ // Ensure otherLeadersColumnTemplate fields have IDs\par
+                newObject.otherLeadersColumnTemplate = ensureIds(newObject.otherLeadersColumnTemplate);\par
+            \}\par
+            return newObject;\par
+          \}\par
+          return data;\par
+        \};\par
+\par
+        const processedLoadedData = ensureIds(loadedData);\par
+\par
+        // Manually handle branchCellLeaders to ensure template is correctly loaded/merged\par
+        const defaultBranchCellLeaders = defaultSectionData.branchCellLeaders();\par
+        let loadedBranchCellLeaders = processedLoadedData.branchCellLeaders || \{\};\par
+\par
+        // Merge main fields (Elder, Report Submitted By)\par
+        const mergedMainFields = defaultBranchCellLeaders.fields.map(defaultField => \{\par
+            const loadedField = loadedBranchCellLeaders.fields?.find(f => f.label === defaultField.label);\par
+            return loadedField ? \{ ...defaultField, ...loadedField \} : defaultField;\par
+        \});\par
+        // Add any custom main fields\par
+        loadedBranchCellLeaders.fields?.forEach(loadedField => \{\par
+            if (!mergedMainFields.some(f => f.id === loadedField.id)) \{\par
+                if (!defaultBranchCellLeaders.fields.some(df => df.label === loadedField.label)) \{\par
+                    mergedMainFields.push(loadedField);\par
+                \}\par
+            \}\par
+        \});\par
+\par
+        // Determine the canonical column template for other leaders\par
+        let canonicalOtherLeadersColumnTemplate = defaultBranchCellLeaders.otherLeadersColumnTemplate;\par
+        if (loadedBranchCellLeaders.otherLeadersColumnTemplate) \{\par
+            // Merge loaded template with default template\par
+            canonicalOtherLeadersColumnTemplate = defaultBranchCellLeaders.otherLeadersColumnTemplate.map(defaultCol => \{\par
+                const loadedCol = loadedBranchCellLeaders.otherLeadersColumnTemplate.find(lc => lc.label === defaultCol.label);\par
+                return loadedCol ? \{ ...defaultCol, ...loadedCol \} : defaultCol;\par
+            \});\par
+            // Add any custom columns from loaded data that are not in default\par
+            loadedBranchCellLeaders.otherLeadersColumnTemplate.forEach(loadedCol => \{\par
+                if (!canonicalOtherLeadersColumnTemplate.some(cc => cc.id === loadedCol.id)) \{\par
+                    if (!defaultBranchCellLeaders.otherLeadersColumnTemplate.some(dc => dc.label === loadedCol.label)) \{\par
+                        canonicalOtherLeadersColumnTemplate.push(loadedCol);\par
+                    \}\par
+                \}\par
+            \});\par
+        \}\par
+\par
+        // Process existing otherLeaders data to conform to the canonical template\par
+        const mergedOtherLeaders = (loadedBranchCellLeaders.otherLeaders || []).map(loadedLeader => \{\par
+            const newLeaderFields = canonicalOtherLeadersColumnTemplate.map(templateField => \{\par
+                const existingField = loadedLeader.fields?.find(f => f.id === templateField.id);\par
+                return existingField ? \{ ...templateField, value: existingField.value \} : \{ ...templateField, value: '' \};\par
+            \});\par
+            return \{ ...loadedLeader, fields: newLeaderFields \};\par
+        \});\par
+\par
+        processedLoadedData.branchCellLeaders = \{\par
+            fields: mergedMainFields,\par
+            otherLeadersColumnTemplate: canonicalOtherLeadersColumnTemplate,\par
+            otherLeaders: mergedOtherLeaders,\par
+        \};\par
+\par
+        // Apply merge to generalInfo\par
+        processedLoadedData.generalInfo = processedLoadedData.generalInfo.map(field => \{\par
+            const defaultField = defaultSectionData.generalInfo().find(f => f.label === field.label);\par
+            return defaultField ? \{ ...defaultField, ...field \} : field;\par
+        \});\par
+\par
+\par
+        // Apply merge to dynamic sections\par
+        processedLoadedData.sections = processedLoadedData.sections.map(section => \{\par
+          const defaultSectionItems = defaultSectionData[section.type]();\par
+          if (Array.isArray(section.data) && section.data[0] && 'fields' in section.data[0]) \{\par
+            // Section is an array of items, each with fields\par
+            return \{\par
+              ...section,\par
+              data: section.data.map(item => \{\par
+                const defaultItemFields = defaultSectionItems[0]?.fields || []; // Use optional chaining\par
+                const mergedFields = defaultItemFields.map(defaultField => \{\par
+                  const loadedField = item.fields?.find(f => f.label === defaultField.label); // Use optional chaining\par
+                  return loadedField ? \{ ...defaultField, ...loadedField \} : defaultField;\par
+                \});\par
+                item.fields?.forEach(loadedField => \{ // Use optional chaining\par
+                  if (!mergedFields.some(f => f.id === loadedField.id)) \{\par
+                    if (!defaultItemFields.some(df => df.label === loadedField.label)) \{\par
+                      mergedFields.push(loadedField);\par
+                    \}\par
+                  \}\par
+                \});\par
+                return \{ ...item, fields: mergedFields \};\par
+              \}),\par
+            \};\par
+          \} else if (Array.isArray(section.data)) \{ // Section is directly an array of fields\par
+            const mergedFields = defaultSectionItems.map(defaultField => \{\par
+                const loadedField = section.data.find(f => f.label === defaultField.label);\par
+                return loadedField ? \{ ...defaultField, ...loadedField \} : defaultField;\par
+            \});\par
+            section.data.forEach(loadedField => \{\par
+                if (!mergedFields.some(f => f.id === loadedField.id)) \{\par
+                    if (!defaultSectionItems.some(df => df.label === loadedField.label)) \{\par
+                        mergedFields.push(loadedField);\par
+                    \}\par
+                \}\par
+            \});\par
+            return \{ ...section, data: mergedFields \};\par
+          \}\par
+          return section;\par
+        \});\par
+\par
+        setReportData(processedLoadedData);\par
+        reapplySectionNumbering(); // Re-apply numbering after loading\par
+        setShowLoadSuccess(true);\par
+        setTimeout(() => setShowLoadSuccess(false), 3000);\par
+      \} else \{\par
+        console.log("No such document!");\par
+      \}\par
+    \} catch (e) \{\par
+      console.error("Error loading document: ", e);\par
+    \}\par
+  \};\par
+\par
+\par
+  const handleDeleteClick = (reportId) => \{\par
+    setReportToDelete(reportId);\par
+    setShowConfirmModal(true);\par
+  \};\par
+\par
+  const confirmDelete = async () => \{\par
+    if (!userId || !db || !reportToDelete) \{\par
+      console.error("User not authenticated, Firestore not initialized, or no report to delete.");\par
+      return;\par
+    \}\par
+    try \{\par
+      await setDoc(doc(db, `artifacts/$\{appId\}/users/$\{userId\}/reports`, reportToDelete), \{\});\par
+      setShowDeleteSuccess(true);\par
+      setTimeout(() => setShowDeleteSuccess(false), 3000);\par
+      if (selectedReportId === reportToDelete) \{\par
+        setSelectedReportId('');\par
+        // Reset form to initial state including labels and default sections\par
+        setReportData(() => \{\par
+          const initialBranchCellLeaders = defaultSectionData.branchCellLeaders();\par
+          if (initialBranchCellLeaders.otherLeaders.length === 0) \{\par
+            initialBranchCellLeaders.otherLeaders.push(\{\par
+              id: generateUniqueId(),\par
+              fields: initialBranchCellLeaders.otherLeadersColumnTemplate.map(field => (\{ ...field, value: '' \}))\par
+            \});\par
+          \}\par
+          return \{\par
+            generalInfo: defaultSectionData.generalInfo(),\par
+            branchCellLeaders: initialBranchCellLeaders,\par
+            sections: [\par
+              \{ id: generateUniqueId(), type: 'generalMembership', data: defaultSectionData.generalMembership(), userDefinedBaseTitle: getBaseTitle('generalMembership') \},\par
+              \{ id: generateUniqueId(), type: 'youthAndChildrenProgram', data: defaultSectionData.youthAndChildrenProgram(), userDefinedBaseTitle: getBaseTitle('youthAndChildrenProgram') \},\par
+              \{ id: generateUniqueId(), type: 'bibleStudies', data: defaultSectionData.bibleStudies(), userDefinedBaseTitle: getBaseTitle('bibleStudies') \},\par
+              \{ id: generateUniqueId(), type: 'layActivities', data: defaultSectionData.layActivities(), userDefinedBaseTitle: getBaseTitle('layActivities') \},\par
+              \{ id: generateUniqueId(), type: 'specialDivineServices', data: defaultSectionData.specialDivineServices(), userDefinedBaseTitle: getBaseTitle('specialDivineServices') \},\par
+              \{ id: generateUniqueId(), type: 'ministerialEldershipSupport', data: defaultSectionData.ministerialEldershipSupport(), userDefinedBaseTitle: getBaseTitle('ministerialEldershipSupport') \},\par
+              \{ id: generateUniqueId(), type: 'visitationPrograms', data: defaultSectionData.visitationPrograms(), userDefinedBaseTitle: getBaseTitle('visitationPrograms') \},\par
+              \{ id: generateUniqueId(), type: 'prayerWalksConducted', data: defaultSectionData.prayerWalksConducted(), userDefinedBaseTitle: getBaseTitle('prayerWalksConducted') \},\par
+              \{ id: generateUniqueId(), type: 'womensMinistriesActivities', data: defaultSectionData.womensMinistriesActivities(), userDefinedBaseTitle: getBaseTitle('womensMinistriesActivities') \},\par
+              \{ id: generateUniqueId(), type: 'offeringsFinance', data: defaultSectionData.offeringsFinance(), userDefinedBaseTitle: getBaseTitle('offeringsFinance') \},\par
+              \{ id: generateUniqueId(), type: 'facilitiesLogistics', data: defaultSectionData.facilitiesLogistics(), userDefinedBaseTitle: getBaseTitle('facilitiesLogistics') \},\par
+              \{ id: generateUniqueId(), type: 'challengesRecommendations', data: defaultSectionData.challengesRecommendations(), userDefinedBaseTitle: getBaseTitle('challengesRecommendations') \},\par
+              \{ id: generateUniqueId(), type: 'acknowledgments', data: defaultSectionData.acknowledgments(), userDefinedBaseTitle: getBaseTitle('acknowledgments') \},\par
+              \{ id: generateUniqueId(), type: 'summaryNextSteps', data: defaultSectionData.summaryNextSteps(), userDefinedBaseTitle: getBaseTitle('summaryNextSteps') \},\par
+              \{ id: generateUniqueId(), type: 'additionalPhotos', data: defaultSectionData.additionalPhotos(), userDefinedBaseTitle: getBaseTitle('additionalPhotos') \},\par
+            ],\par
+            generalLabels: \{ // Reset general labels to their default values\par
+              mainTitle: 'Quarterly Report Form',\par
+              userIdLabel: 'User ID:',\par
+              loadDeleteLabel: 'Load/Delete Saved Report:',\par
+              selectReportOption: '-- Select a Report --',\par
+              loadButton: 'Load Report',\par
+              deleteButton: 'Delete Report',\par
+              saveButton: 'Save Current Report',\par
+              generatePdfButton: 'Generate PDF',\par
+              generatingPdfButton: 'Generating PDF...',\par
+              saveSuccess: 'Report saved successfully!',\par
+              loadSuccess: 'Report loaded successfully!',\par
+              deleteSuccess: 'Report deleted successfully!',\par
+              confirmDelete: 'Are you sure you want to delete this report?',\par
+              yesDelete: 'Yes, Delete',\par
+              cancel: 'Cancel',\par
+              addActivity: 'Add Activity',\par
+              remove: 'Remove',\par
+              addBibleStudy: 'Add Bible Study',\par
+              addLayActivity: 'Add Activity',\par
+              addServiceMeeting: 'Add Service/Meeting',\par
+              addVisitationProgram: 'Add Visitation Program',\par
+              addPrayerWalk: 'Add Prayer Walk',\par
+              addWomensMinistryActivity: 'Add Women\\'s Ministry Activity',\par
+              addOtherLeader: 'Add Other Leader',\par
+              addPhotoSlot: 'Add Photo Slot',\par
+              addField: 'Add Field',\par
+              removeField: 'Remove Field',\par
+              addItem: 'Add Item',\par
+              noYouthActivities: 'No youth and children\\'s program activities recorded.',\par
+              noBibleStudies: 'No Bible studies recorded.',\par
+              noLayActivities: 'No lay activities recorded.',\par
+              noSpecialServices: 'No special divine services/meetings/highlights recorded.',\par
+              noVisitationPrograms: 'No visitation programs recorded.',\par
+              noPrayerWalks: 'No prayer walks conducted.',\par
+              noWomensActivities: 'No women\\'s ministries activities recorded.',\par
+              noOtherLeaders: 'No other leaders recorded.',\par
+              noPhotosUploaded: 'No photos uploaded for this section.',\par
+              noAdditionalPhotos: 'No additional photos uploaded.',\par
+              noCustomItems: 'No custom items recorded.',\par
+              seePhotosBelow: 'See photos below;',\par
+              footerText: '"Therefore, my dear brothers and sisters, stand firm. Let nothing move you. Always give yourselves fully to the work of the Lord, because you know that your labor in the Lord is not in vain." - 1 Corinthians 15:58',\par
+              additionalPhotosInstruction: 'Attach additional photos or supporting documents if needed. If no photos, then simply make a note or leave it as blank in the photo slots.',\par
+              slotTitle: 'Photo Slot',\par
+              upload: 'Upload Photo(s) (Max 4):',\par
+              otherLeadersTableTitle: 'Other Leaders (Indicate Name and Position)',\par
+              itemTitle: 'Item',\par
+            \},\par
+          \};\par
+        \});\par
+      \}\par
+    \} catch (e) \{\par
+      console.error("Error deleting document: ", e);\par
+    \} finally \{\par
+      setShowConfirmModal(false);\par
+      setReportToDelete(null);\par
+    \}\par
+  \};\par
+\par
+  const cancelDelete = () => \{\par
+    setShowConfirmModal(false);\par
+    setReportToDelete(null);\par
+  \};\par
+\par
+  const getFormattedDate = () => \{\par
+    const today = new Date();\par
+    const yyyy = today.getFullYear();\par
+    const mm = String(today.getMonth() + 1).padStart(2, '0');\par
+    const dd = String(today.getDate()).padStart(2, '0');\par
+    return `$\{yyyy\}-$\{mm\}-$\{dd\}`;\par
+  \};\par
+\par
+  // Helper component for editable labels using contentEditable\par
+  const EditableLabel = (\{ sectionKey, itemIndex = null, fieldId = null, currentLabel, onLabelChange, className = '' \}) => \{\par
+    const handleInput = (e) => \{\par
+      const newValue = e.target.innerText;\par
+      onLabelChange(sectionKey, fieldId, newValue, itemIndex);\par
+    \};\par
+\par
+    return (\par
+      <span\par
+        contentEditable\par
+        suppressContentEditableWarning=\{true\} // Suppress React warning for contentEditable\par
+        onBlur=\{handleInput\} // Save on blur\par
+        onKeyDown=\{(e) => \{\par
+          if (e.key === 'Enter') \{\par
+            e.preventDefault(); // Prevent new line\par
+            e.target.blur(); // Trigger blur to save\par
+          \}\par
+        \}\}\par
+        className=\{`editable-label $\{className\}`\}\par
+      >\par
+        \{currentLabel\}\par
+      </span>\par
+    );\par
+  \};\par
+\par
+  // Small button with a plus symbol for adding sections\par
+  const AddSectionButton = (\{ onClick \}) => (\par
+    <button\par
+      onClick=\{onClick\}\par
+      className="flex items-center justify-center w-8 h-8 bg-blue-500 text-white rounded-full shadow-md hover:bg-blue-600 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"\par
+      title="Add New Section"\par
+    >\par
+      +\par
+    </button>\par
+  );\par
+\par
+  // Small button for adding/removing fields\par
+  const FieldActionButton = (\{ onClick, type \}) => (\par
+    <button\par
+      onClick=\{onClick\}\par
+      className=\{`ml-2 w-6 h-6 rounded-full flex items-center justify-center text-white text-sm font-bold\par
+        $\{type === 'add' ? 'bg-green-500 hover:bg-green-600' : 'bg-red-500 hover:bg-red-600'\}`\}\par
+      title=\{type === 'add' ? 'Add Field' : 'Remove Field'\}\par
+    >\par
+      \{type === 'add' ? '+' : '-'\}\par
+    </button>\par
+  );\par
+\par
+  // New component for small round remove buttons\par
+  const SmallRemoveButton = (\{ onClick, title \}) => (\par
+    <button\par
+      onClick=\{onClick\}\par
+      className="w-6 h-6 rounded-full flex items-center justify-center text-white text-sm font-bold bg-red-500 hover:bg-red-600 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50"\par
+      title=\{title\}\par
+    >\par
+      -\par
+    </button>\par
+  );\par
+\par
+  // New function to add a new leader row to the otherLeaders array\par
+  const addOtherLeader = () => \{\par
+    setReportData(prevData => (\{\par
+      ...prevData,\par
+      branchCellLeaders: \{\par
+        ...prevData.branchCellLeaders,\par
+        // Deep copy the current column template for the new leader's fields\par
+        otherLeaders: [...prevData.branchCellLeaders.otherLeaders, \{\par
+          id: generateUniqueId(),\par
+          fields: prevData.branchCellLeaders.otherLeadersColumnTemplate.map(field => (\{ ...field, value: '' \}))\par
+        \}]\par
+      \},\par
+    \}));\par
+  \};\par
+\par
+  // New function to remove a leader row from the otherLeaders array\par
+  const removeOtherLeader = (leaderIdToRemove) => \{\par
+    setReportData(prevData => (\{\par
+      ...prevData,\par
+      branchCellLeaders: \{\par
+        ...prevData.branchCellLeaders,\par
+        otherLeaders: prevData.branchCellLeaders.otherLeaders.filter(leader => leader.id !== leaderIdToRemove)\par
+      \},\par
+    \}));\par
+  \};\par
+\par
+\par
+  return (\par
+    <div className="min-h-screen bg-gray-100 p-4 font-inter">\par
+      <script src="https://cdn.tailwindcss.com"></script>\par
+      <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />\par
+\par
+      <style>\par
+        \{`\par
+        body \{\par
+          font-family: 'Inter', sans-serif;\par
+        \}\par
+        .form-section \{\par
+          background-color: #fff;\par
+          padding: 1.5rem;\par
+          border-radius: 0.5rem;\par
+          box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);\par
+          margin-bottom: 1.5rem;\par
+        \}\par
+        .form-input \{\par
+          width: 100%;\par
+          padding: 0.75rem;\par
+          border: 1px solid #d1d5db;\par
+          border-radius: 0.375rem;\par
+          margin-top: 0.25rem;\par
+          margin-bottom: 1rem;\par
+          box-sizing: border-box;\par
+        \}\par
+        .form-textarea \{\par
+          width: 100%;\par
+          padding: 0.75rem;\par
+          border: 1px solid #d1d5db;\par
+          border-radius: 0.375rem;\par
+          margin-top: 0.25rem;\par
+          margin-bottom: 1rem;\par
+          box-sizing: border-box;\par
+          min-height: 80px;\par
+        \}\par
+        .section-title \{\par
+          font-size: 1.5rem;\par
+          font-weight: 600;\par
+          color: #1f2937;\par
+          margin-bottom: 1rem;\par
+          border-bottom: 2px solid #e5e7eb;\par
+          padding-bottom: 0.5rem;\par
+          display: flex; /* Added for alignment */\par
+          align-items: center; /* Added for alignment */\par
+        \}\par
+        .sub-section-title \{\par
+          font-size: 1.125rem;\par
+          font-weight: 500;\par
+          color: #374151;\par
+          margin-top: 1.5rem;\par
+          margin-bottom: 0.75rem;\par
+        \}\par
+        .btn-primary \{\par
+          background-color: #4f46e5;\par
+          color: white;\par
+          padding: 0.75rem 1.25rem;\par
+          border-radius: 0.375rem;\par
+          font-weight: 600;\par
+          cursor: pointer;\par
+          transition: background-color 0.2s ease-in-out;\par
+        \}\par
+        .btn-primary:hover \{\par
+          background-color: #4338ca;\par
+        \}\par
+        .btn-secondary \{\par
+          background-color: #6b7280;\par
+          color: white;\par
+          padding: 0.75rem 1.25rem;\par
+          border-radius: 0.375rem;\par
+          font-weight: 600;\par
+          cursor: pointer;\par
+          transition: background-color 0.2s ease-in-out;\par
+        \}\par
+        .btn-secondary:hover \{\par
+          background-color: #4b5563;\par
+        \}\par
+        .btn-add \{\par
+          background-color: #10b981;\par
+          color: white;\par
+          padding: 0.5rem 1rem;\par
+          border-radius: 0.375rem;\par
+          font-weight: 500;\par
+          cursor: pointer;\par
+          transition: background-color 0.2s ease-in-out;\par
+        \}\par
+        .btn-add:hover \{\par
+          background-color: #059669;\par
+        \}\par
+        .btn-remove \{\par
+          background-color: #ef4444;\par
+          color: white;\par
+          padding: 0.5rem 1rem;\par
+          border-radius: 0.375rem;\par
+          font-weight: 500;\par
+          cursor: pointer;\par
+          transition: background-color 0.2s ease-in-out;\par
+        \}\par
+        .btn-remove:hover \{\par
+          background-color: #dc2626;\par
+        \}\par
+        /* Smaller remove section button */\par
+        .btn-remove-section \{\par
+          background-color: #ef4444;\par
+          color: white;\par
+          width: 28px; /* Fixed width */\par
+          height: 28px; /* Fixed height */\par
+          border-radius: 50%; /* Make it round */\par
+          font-weight: bold;\par
+          font-size: 1rem; /* Adjust font size for minus sign */\par
+          display: flex;\par
+          justify-content: center;\par
+          align-items: center;\par
+          cursor: pointer;\par
+          transition: background-color 0.2s ease-in-out;\par
+          position: absolute;\par
+          top: 0.8rem; /* Adjusted top position */\par
+          right: 0.8rem; /* Adjusted right position */\par
+        \}\par
+        .btn-remove-section:hover \{\par
+          background-color: #dc2626;\par
+        \}\par
+        .message-box \{\par
+          position: fixed;\par
+          top: 1rem;\par
+          right: 1rem;\par
+          background-color: #10b981;\par
+          color: white;\par
+          padding: 0.75rem 1.5rem;\par
+          border-radius: 0.5rem;\par
+          box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);\par
+          z-index: 1000;\par
+          animation: fadeOut 3s forwards;\par
+        \}\par
+        @keyframes fadeOut \{\par
+          0% \{ opacity: 1; \}\par
+          90% \{ opacity: 1; \}\par
+          100% \{ opacity: 0; \}\par
+        \}\par
+        .modal-overlay \{\par
+          position: fixed;\par
+          top: 0;\par
+          left: 0;\par
+          right: 0;\par
+          bottom: 0;\par
+          background-color: rgba(0, 0, 0, 0.5);\par
+          display: flex;\par
+          justify-content: center;\par
+          align-items: center;\par
+          z-index: 1000;\par
+        \}\par
+        .modal-content \{\par
+          background-color: white;\par
+          padding: 2rem;\par
+          border-radius: 0.5rem;\par
+          box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);\par
+          text-align: center;\par
+        \}\par
+        .photo-upload-section \{\par
+          margin-top: 1rem;\par
+          padding-top: 1rem;\par
+          border-top: 1px dashed #e5e7eb;\par
+        \}\par
+        .photo-preview-container \{\par
+          display: flex;\par
+          flex-wrap: wrap;\par
+          gap: 10px;\par
+          margin-top: 0.5rem;\par
+        \}\par
+        .photo-preview \{\par
+          max-width: 100px; /* Smaller in form for multiple previews */\par
+          height: auto;\par
+          border-radius: 0.25rem;\par
+          border: 1px solid #ddd;\par
+          position: relative;\par
+        \}\par
+        .remove-photo-btn \{\par
+          position: absolute;\par
+          top: -5px;\par
+          right: -5px;\par
+          background-color: #ef4444;\par
+          color: white;\par
+          border-radius: 50%;\par
+          width: 20px;\par
+          height: 20px;\par
+          display: flex;\par
+          justify-content: center;\par
+          align-items: center;\par
+          font-size: 0.75rem;\par
+          cursor: pointer;\par
+          z-index: 10;\par
+        \}\par
+\par
+        /* Styles for editable labels */\par
+        .editable-label \{\par
+            font-weight: bold; /* Make them look like labels in the form */\par
+            color: #374151; /* Darker text for labels */\par
+            background-color: transparent; /* No background by default */\par
+            border: 1px solid transparent; /* Transparent border */\par
+            padding: 0.25rem 0.5rem; /* Small padding */\par
+            border-radius: 0.25rem;\par
+            transition: all 0.2s ease-in-out;\par
+            width: auto; /* Allow width to adjust to content */\par
+            display: inline-block; /* Allow them to sit next to inputs */\par
+            margin-bottom: 0; /* Remove default input margin-bottom */\par
+            cursor: text; /* Indicate editable text */\par
+        \}\par
+        .editable-label:hover \{\par
+            background-color: #f3f4f6; /* Light background on hover */\par
+            border: 1px solid #e5e7eb; /* Light border on hover */\par
+        \}\par
+        .editable-label:focus \{\par
+            background-color: #fff; /* White background on focus */\par
+            border: 1px solid #93c5fd; /* Blue border on focus */\par
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2); /* Focus ring */\par
+            outline: none;\par
+        \}\par
+        /* Specific adjustments for labels that act as section titles */\par
+        .editable-section-title \{\par
+            font-size: 1.5rem;\par
+            font-weight: 600;\par
+            color: #1f2937;\par
+            /* Removed layout-related styles from here, moved to .section-title */\par
+            /* margin-bottom: 1rem; */\par
+            /* border-bottom: 2px solid #e5e7eb; */\par
+            /* padding-bottom: 0.5rem; */\par
+            /* width: 100%; */\par
+            text-align: left;\par
+        \}\par
+        .editable-sub-section-title \{\par
+            font-size: 1.125rem;\par
+            font-weight: 500;\par
+            color: #374151;\par
+            margin-top: 1.5rem;\par
+            margin-bottom: 0.75rem;\par
+            width: 100%;\par
+            text-align: left;\par
+        \}\par
+        .editable-multiline-label \{\par
+            display: block; /* Ensures it takes its own line */\par
+            min-height: 24px; /* A reasonable min-height for a label, not a textarea */\par
+            white-space: pre-wrap; /* Allows text to wrap */\par
+            padding: 0.25rem 0.5rem; /* Consistent padding */\par
+            box-sizing: border-box; /* Include padding in width/height */\par
+        \}\par
+\par
+\par
+        /* PDF Specific Styles (for pdfContentRef) */\par
+        .pdf-report-container \{\par
+            font-family: 'Inter', sans-serif;\par
+            font-size: 10pt;\par
+            line-height: 1.4;\par
+            color: #333;\par
+            position: fixed;\par
+            top: 0;\par
+            left: 0;\par
+            z-index: -1;\par
+            opacity: 0;\par
+            box-sizing: border-box;\par
+        \}\par
+        .pdf-section \{\par
+            page-break-inside: avoid;\par
+            margin-bottom: 20px;\par
+        \}\par
+        .pdf-section-title \{\par
+            font-size: 14pt;\par
+            font-weight: bold;\par
+            margin-top: 20px;\par
+            margin-bottom: 10px;\par
+            border-bottom: 1px solid #ccc;\par
+            padding-bottom: 5px;\par
+            page-break-after: avoid;\par
+            page-break-inside: avoid;\par
+        \}\par
+        .pdf-sub-section-title \{\par
+            font-size: 12pt;\par
+            font-weight: bold;\par
+            margin-top: 15px;\par
+            margin-bottom: 8px;\par
+            page-break-after: avoid;\par
+            page-break-inside: avoid;\par
+        \}\par
+        .pdf-text-field \{\par
+            margin-bottom: 8px;\par
+            page-break-inside: avoid;\par
+        \}\par
+        .pdf-text-field strong \{ /* Ensure strong tag is applied to labels in PDF */\par
+            font-weight: bold;\par
+        \}\par
+        .pdf-text-field span \{\par
+            font-weight: normal;\par
+        \}\par
+        .pdf-table \{\par
+            width: 96%; /* Adjusted width to ensure it fits within margins */\par
+            table-layout: fixed; /* Ensures equal column width distribution */\par
+            border-collapse: collapse;\par
+            margin-bottom: 15px;\par
+            page-break-inside: avoid;\par
+            margin: 0 auto; /* Center the table horizontally */\par
+        \}\par
+        .pdf-table th \{\par
+            border: 1px solid #ccc;\par
+            padding: 8px;\par
+            text-align: center; /* Headers can be left-aligned or centered as per preference */\par
+            vertical-align: top;\par
+            word-wrap: break-word;\par
+            box-sizing: border-box;\par
+            page-break-inside: avoid;\par
+            background-color: #f0f0f0;\par
+            font-weight: bold;\par
+        \}\par
+        .pdf-table td \{\par
+            border: 1px solid #ccc;\par
+            padding: 8px;\par
+            text-align: center; /* Keep content centered as per previous instruction */\par
+            vertical-align: top;\par
+            word-wrap: break-word;\par
+            box-sizing: border-box;\par
+            page-break-inside: avoid;\par
+            font-weight: normal; /* Explicitly set to normal for td content */\par
+        \}\par
+        .pdf-table tr \{\par
+            page-break-inside: avoid;\par
+            page-break-after: auto;\par
+        \}\par
+        .pdf-photo-section \{\par
+            margin-top: 15px;\par
+            margin-bottom: 15px;\par
+            page-break-inside: avoid;\par
+        \}\par
+        .pdf-photo-grid \{\par
+            display: flex;\par
+            flex-wrap: wrap;\par
+            gap: 15px;\par
+            justify-content: center;\par
+        \}\par
+        .pdf-photo-container \{\par
+            text-align: center;\par
+            page-break-inside: avoid;\par
+        \}\par
+        .pdf-photo \{\par
+            max-width: 250px;\par
+            height: auto;\par
+            border: 1px solid #ddd;\par
+            padding: 5px;\par
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);\par
+        \}\par
+        .pdf-page-break \{\par
+            page-break-before: always;\par
+        \}\par
+        `\}\par
+      </style>\par
+\par
+      <h1 className="text-3xl font-bold text-center text-gray-800 mb-6">\par
+        <EditableLabel currentLabel=\{reportData.generalLabels.mainTitle\} sectionKey="generalLabels" fieldId="mainTitle" onLabelChange=\{handleFieldLabelChange\} /> Branch/Cell Church\par
+      </h1>\par
+      \{userId && <p className="text-center text-gray-600 mb-4"><span><EditableLabel currentLabel=\{reportData.generalLabels.userIdLabel\} sectionKey="generalLabels" fieldId="userIdLabel" onLabelChange=\{handleFieldLabelChange\} /></span> \{userId\}</p>\}\par
+\par
+      <div className="max-w-4xl mx-auto">\par
+        <div className="form-section flex flex-wrap gap-4 mb-6 items-end">\par
+          <div className="flex-1 min-w-[200px]">\par
+            <label htmlFor="selectReport" className="block text-gray-700 text-sm font-bold mb-2">\par
+              <EditableLabel currentLabel=\{reportData.generalLabels.loadDeleteLabel\} sectionKey="generalLabels" fieldId="loadDeleteLabel" onLabelChange=\{handleFieldLabelChange\} />\par
+            </label>\par
+            <select\par
+              id="selectReport"\par
+              className="form-input"\par
+              value=\{selectedReportId\}\par
+              onChange=\{(e) => setSelectedReportId(e.target.value)\}\par
+            >\par
+              <option value="">\{reportData.generalLabels.selectReportOption\}</option>\par
+              \{savedReports.map(report => (\par
+                <option key=\{report.id\} value=\{report.id\}>\par
+                  \{report.generalInfo.find(field => field.label === 'Branch Church Name:')?.value || 'Untitled'\} - \{\par
+                    report.generalInfo.find(field => field.label === 'Date Submitted:')?.value ?\par
+                    new Date(report.generalInfo.find(field => field.label === 'Date Submitted:')?.value).toLocaleDateString() :\par
+                    'No Date'\par
+                  \}\par
+                </option>\par
+              ))\}\par
+            </select>\par
+          </div>\par
+          <button onClick=\{loadReport\} className="btn-secondary px-6 py-2 rounded-md">\{reportData.generalLabels.loadButton\}</button>\par
+          <button onClick=\{() => handleDeleteClick(selectedReportId)\} className="btn-remove px-6 py-2 rounded-md" disabled=\{!selectedReportId\}>\{reportData.generalLabels.deleteButton\}</button>\par
+        </div>\par
+\par
+        <div className="flex justify-end mb-6">\par
+          <button onClick=\{saveReport\} className="btn-primary mr-2">\{reportData.generalLabels.saveButton\}</button>\par
+          <button onClick=\{generatePdf\} className="btn-primary" disabled=\{!isHtml2PdfLoaded || isGeneratingPdf\}>\par
+            \{isGeneratingPdf ? reportData.generalLabels.generatingPdfButton : reportData.generalLabels.generatePdfButton\}\par
+          </button>\par
+        </div>\par
+\par
+        \{showSaveSuccess && (\par
+          <div className="message-box">\{reportData.generalLabels.saveSuccess\}</div>\par
+        )\}\par
+        \{showLoadSuccess && (\par
+          <div className="message-box bg-blue-500">\{reportData.generalLabels.loadSuccess\}</div>\par
+        )\}\par
+        \{showDeleteSuccess && (\par
+          <div className="message-box bg-red-500">\{reportData.generalLabels.deleteSuccess\}</div>\par
+        )\}\par
+\par
+        \{showConfirmModal && (\par
+          <div className="modal-overlay">\par
+            <div className="modal-content">\par
+              <p className="text-lg font-semibold mb-4"><strong>\{reportData.generalLabels.confirmDelete\}</strong></p>\par
+              <div className="flex justify-center gap-4">\par
+                <button onClick=\{confirmDelete\} className="btn-remove">\{reportData.generalLabels.yesDelete\}</button>\par
+                <button onClick=\{cancelDelete\} className="btn-secondary">\{reportData.generalLabels.cancel\}</button>\par
+              </div>\par
+            </div>\par
+          </div>\par
+        )\}\par
+\par
+        \{/* This is the form input section */\}\par
+        <div className="form-content">\par
+          <div className="form-section">\par
+            <h2 className="section-title">\par
+              <EditableLabel currentLabel=\{getBaseTitle('generalInfo')\} sectionKey="generalInfo" onLabelChange=\{(sk, fid, newLabel) => setReportData(prev => (\{...prev, generalInfo: prev.generalInfo.map(f => f.id === fid ? \{...f, label: newLabel\} : f)\}))\} className="editable-section-title" />\par
+            </h2>\par
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">\par
+              \{/* Render all fields except 'Date Submitted:' */\}\par
+              \{reportData.generalInfo.filter(field => field.label !== 'Date Submitted:').map((field) => (\par
+                <div key=\{field.id\} className="flex items-center">\par
+                  <label htmlFor=\{`generalInfo-$\{field.id\}`\} className="block text-gray-700 text-sm font-bold mb-2 flex-grow">\par
+                    <EditableLabel\par
+                      currentLabel=\{field.label\}\par
+                      sectionKey="generalInfo"\par
+                      fieldId=\{field.id\}\par
+                      onLabelChange=\{handleFieldLabelChange\}\par
+                    />\par
+                  </label>\par
+                  <input\par
+                    type=\{field.type\}\par
+                    id=\{`generalInfo-$\{field.id\}`\}\par
+                    value=\{field.value || ''\}\par
+                    onChange=\{(e) => handleFieldValueChange('generalInfo', field.id, e.target.value)\}\par
+                    className="form-input flex-grow"\par
+                  />\par
+                  \{reportData.generalInfo.length > 1 && (\par
+                    <FieldActionButton type="remove" onClick=\{() => removeFieldFromSection('generalInfo', field.id)\} />\par
+                  )\}\par
+                </div>\par
+              ))\}\par
+\par
+              \{/* Render the Add Field button here */\}\par
+              <div className="col-span-full flex justify-start mt-2 mb-4 ml-2">\par
+                <button onClick=\{() => addFieldToSection('generalInfo', null, 'text')\} className="btn-add">\par
+                  \{reportData.generalLabels.addField\}\par
+                </button>\par
+              </div>\par
+\par
+              \{/* Render the 'Date Submitted:' field separately */\}\par
+              \{reportData.generalInfo.filter(field => field.label === 'Date Submitted:').map((field) => (\par
+                <div key=\{field.id\} className="flex items-center">\par
+                  <label htmlFor=\{`generalInfo-$\{field.id\}`\} className="block text-gray-700 text-sm font-bold mb-2 flex-grow">\par
+                    <EditableLabel\par
+                      currentLabel=\{field.label\}\par
+                      sectionKey="generalInfo"\par
+                      fieldId=\{field.id\}\par
+                      onLabelChange=\{handleFieldLabelChange\}\par
+                    />\par
+                  </label>\par
+                  <input\par
+                    type="date"\par
+                    id=\{`generalInfo-$\{field.id\}`\}\par
+                    value=\{field.value || getFormattedDate()\}\par
+                    onChange=\{(e) => handleFieldValueChange('generalInfo', field.id, e.target.value)\}\par
+                    className="form-input flex-grow"\par
+                  />\par
+                  \{reportData.generalInfo.length > 1 && (\par
+                    <FieldActionButton type="remove" onClick=\{() => removeFieldFromSection('generalInfo', field.id)\} />\par
+                  )\}\par
+                </div>\par
+              ))\}\par
+            </div>\par
+          </div>\par
+\par
+          \{/* Button to add section before the first one */\}\par
+          <div className="flex justify-center my-4">\par
+            <AddSectionButton onClick=\{() => insertSection(0)\} />\par
+          </div>\par
+\par
+          \{/* Dynamic Sections */\}\par
+          \{reportData.sections.map((section) => (\par
+            <React.Fragment key=\{section.id\}>\par
+              <div className="form-section relative">\par
+                <h2 className="section-title">\par
+                  \{/* Display the full title including number */\}\par
+                  \{section.type !== 'additionalPhotos' && (\par
+                    <span className="mr-2">\{(section.title || '').split('.')[0]\}.</span>\par
+                  )\}\par
+                  \{/* Editable part for the base title */\}\par
+                  <EditableLabel\par
+                    currentLabel=\{section.userDefinedBaseTitle || getBaseTitle(section.type)\}\par
+                    sectionKey=\{section.id\} // Pass section.id as sectionKey\par
+                    onLabelChange=\{(sk, fid, newLabel) => \{ // sk will be section.id\par
+                      setReportData(prev => (\{\par
+                        ...prev,\par
+                        sections: prev.sections.map(s => \{\par
+                          if (s.id === sk) \{\par
+                            return \{ ...s, userDefinedBaseTitle: newLabel \};\par
+                          \}\par
+                          return s;\par
+                        \})\par
+                      \}));\par
+                      reapplySectionNumbering(); // Re-apply numbering after base title edit\par
+                    \}\}\par
+                    className="editable-section-title inline-block"\par
+                  />\par
+                </h2>\par
+                <div className="absolute top-2 right-2">\par
+                  <SmallRemoveButton onClick=\{() => removeSection(section.id)\} title="Remove Section" />\par
+                </div>\par
+\par
+                \{/* Render fields for sections that are directly an array of fields */\}\par
+                \{Array.isArray(section.data) && !(section.data[0] && 'fields' in section.data[0]) && section.type !== 'additionalPhotos' && (\par
+                  <>\par
+                    \{section.data.map((field, fieldIndex) => (\par
+                      <div key=\{field.id\} className="flex items-center">\par
+                        <label htmlFor=\{`$\{section.id\}-$\{field.id\}`\} className="block text-gray-700 text-sm font-bold mb-2 flex-grow">\par
+                          <EditableLabel\par
+                            currentLabel=\{field.label\}\par
+                            sectionKey=\{section.id\}\par
+                            fieldId=\{field.id\}\par
+                            onLabelChange=\{handleFieldLabelChange\}\par
+                          />\par
+                        </label>\par
+                        \{field.type === 'textarea' ? (\par
+                          <textarea\par
+                            id=\{`$\{section.id\}-$\{field.id\}`\}\par
+                            value=\{field.value || ''\}\par
+                            onChange=\{(e) => handleFieldValueChange(section.id, field.id, e.target.value)\}\par
+                            className="form-textarea flex-grow"\par
+                          ></textarea>\par
+                        ) : (\par
+                          <input\par
+                            type=\{field.type\}\par
+                            id=\{`$\{section.id\}-$\{field.id\}`\}\par
+                            value=\{field.value || ''\}\par
+                            onChange=\{(e) => handleFieldValueChange(section.id, field.id, e.target.value)\}\par
+                            className="form-input flex-grow"\par
+                          />\par
+                        )\}\par
+                        \{/* Removed add field button */\}\par
+                        \{section.data.length > 1 && (\par
+                          <FieldActionButton type="remove" onClick=\{() => removeFieldFromSection(section.id, field.id)\} />\par
+                        )\}\par
+                      </div>\par
+                    ))\}\par
+                    <button onClick=\{() => addFieldToSection(section.id, null, 'text')\} className="btn-add mt-4">\{reportData.generalLabels.addField\}</button>\par
+                  </>\par
+                )\}\par
+\par
+                \{/* Render items for sections that are an array of items (each with fields) */\}\par
+                \{Array.isArray(section.data) && section.data[0] && 'fields' in section.data[0] && section.type !== 'customSection' && (\par
+                  <>\par
+                    \{section.data.map((item, itemIndex) => (\par
+                      <div key=\{item.id\} className="border p-4 rounded-md mb-4 relative">\par
+                        <h3 className="sub-section-title">Item \{itemIndex + 1\}</h3>\par
+                        \{item.fields.map((field) => (\par
+                          <div key=\{field.id\} className="flex items-center">\par
+                            <label htmlFor=\{`$\{section.id\}-$\{item.id\}-$\{field.id\}`\} className="block text-gray-700 text-sm font-bold mb-2 flex-grow">\par
+                              <EditableLabel\par
+                                currentLabel=\{field.label\}\par
+                                sectionKey=\{section.id\}\par
+                                itemIndex=\{itemIndex\}\par
+                                fieldId=\{field.id\}\par
+                                onLabelChange=\{handleFieldLabelChange\}\par
+                              />\par
+                            </label>\par
+                            \{field.type === 'textarea' ? (\par
+                              <textarea\par
+                                id=\{`$\{section.id\}-$\{item.id\}-$\{field.id\}`\}\par
+                                value=\{field.value || ''\}\par
+                                onChange=\{(e) => handleFieldValueChange(section.id, field.id, e.target.value, itemIndex)\}\par
+                                className="form-textarea flex-grow"\par
+                              ></textarea>\par
+                            ) : (\par
+                              <input\par
+                                type=\{field.type\}\par
+                                id=\{`$\{section.id\}-$\{item.id\}-$\{field.id\}`\}\par
+                                value=\{field.value || ''\}\par
+                                onChange=\{(e) => handleFieldValueChange(section.id, field.id, e.target.value, itemIndex)\}\par
+                                className="form-input flex-grow"\par
+                              />\par
+                            )\}\par
+                            \{/* Removed add field button */\}\par
+                            \{item.fields.length > 1 && (\par
+                              <FieldActionButton type="remove" onClick=\{() => removeFieldFromSection(section.id, field.id, itemIndex)\} />\par
+                            )\}\par
+                          </div>\par
+                        ))\}\par
+                        <button onClick=\{() => addFieldToSection(section.id, itemIndex, 'text')\} className="btn-add text-sm px-3 py-1 mb-4">\par
+                          \{reportData.generalLabels.addField\}\par
+                        </button>\par
+                        <div className="photo-upload-section">\par
+                          <label className="block text-gray-700 text-sm font-bold mb-2">\par
+                            <EditableLabel currentLabel=\{reportData.generalLabels.upload\} sectionKey="generalLabels" fieldId="upload" onLabelChange=\{handleFieldLabelChange\} />\par
+                          </label>\par
+                          <input\par
+                            type="file"\par
+                            accept="image/*"\par
+                            multiple\par
+                            onChange=\{(e) => handleFileChange(e, section.id, itemIndex)\}\par
+                            className="form-input"\par
+                            disabled=\{(item.photos?.length || 0) >= 4\}\par
+                          />\par
+                          \{(item.photos && item.photos.length > 0) && (\par
+                            <div className="photo-preview-container">\par
+                              \{item.photos.map((photo, photoIdx) => (\par
+                                <div key=\{photoIdx\} style=\{\{ position: 'relative' \}\}>\par
+                                  <img src=\{photo\} alt=\{`Item $\{itemIndex + 1\} Photo $\{photoIdx + 1\}`\} className="photo-preview" />\par
+                                  <button\par
+                                    type="button"\par
+                                    onClick=\{() => removePhotoFromSlot(section.id, itemIndex, photoIdx)\}\par
+                                    className="remove-photo-btn"\par
+                                  >\par
+                                    &times;\par
+                                  </button>\par
+                                </div>\par
+                              ))\}\par
+                            </div>\par
+                          )\}\par
+                        </div>\par
+                        <div className="absolute top-2 right-2">\par
+                          <SmallRemoveButton onClick=\{() => removeRow(section.id, section.type, itemIndex)\} title="Remove Item" />\par
+                        </div>\par
+                      </div>\par
+                    ))\}\par
+                    <button onClick=\{() => addRow(section.id, section.type)\} className="btn-add">\{reportData.generalLabels[`add$\{section.type.charAt(0).toUpperCase() + section.type.slice(1)\}`] || reportData.generalLabels.addItem\}</button>\par
+                  </>\par
+                )\}\par
+\par
+                \{/* Custom Section rendering (similar to array of items) */\}\par
+                \{section.type === 'customSection' && (\par
+                  <>\par
+                    \{section.data.map((item, itemIndex) => (\par
+                      <div key=\{item.id\} className="border p-4 rounded-md mb-4 relative">\par
+                        <h3 className="sub-section-title">\par
+                          <EditableLabel currentLabel=\{reportData.generalLabels.itemTitle\} sectionKey="generalLabels" fieldId="itemTitle" onLabelChange=\{handleFieldLabelChange\} /> \{itemIndex + 1\}\par
+                        </h3>\par
+                        \{item.fields.map((field) => (\par
+                          <div key=\{field.id\} className="flex items-center">\par
+                            <label htmlFor=\{`$\{section.id\}-$\{item.id\}-$\{field.id\}`\} className="block text-gray-700 text-sm font-bold mb-2 flex-grow">\par
+                              <EditableLabel\par
+                                currentLabel=\{field.label\}\par
+                                sectionKey=\{section.id\}\par
+                                itemIndex=\{itemIndex\}\par
+                                fieldId=\{field.id\}\par
+                                onLabelChange=\{handleFieldLabelChange\}\par
+                              />\par
+                            </label>\par
+                            \{field.type === 'textarea' ? (\par
+                              <textarea\par
+                                id=\{`$\{section.id\}-$\{item.id\}-$\{field.id\}`\}\par
+                                value=\{field.value || ''\}\par
+                                onChange=\{(e) => handleFieldValueChange(section.id, field.id, e.target.value, itemIndex)\}\par
+                                className="form-textarea flex-grow"\par
+                              ></textarea>\par
+                            ) : (\par
+                              <input\par
+                                type=\{field.type\}\par
+                                id=\{`$\{section.id\}-$\{item.id\}-$\{field.id\}`\}\par
+                                value=\{field.value || ''\}\par
+                                onChange=\{(e) => handleFieldValueChange(section.id, field.id, e.target.value, itemIndex)\}\par
+                                className="form-input flex-grow"\par
+                              />\par
+                            )\}\par
+                            \{/* Removed add field button */\}\par
+                            \{item.fields.length > 1 && (\par
+                              <FieldActionButton type="remove" onClick=\{() => removeFieldFromSection(section.id, field.id, itemIndex)\} />\par
+                            )\}\par
+                          </div>\par
+                        ))\}\par
+                        <button onClick=\{() => addFieldToSection(section.id, itemIndex, 'text')\} className="btn-add text-sm px-3 py-1 mb-4">\par
+                          \{reportData.generalLabels.addField\}\par
+                        </button>\par
+\par
+                        <div className="photo-upload-section">\par
+                          <label className="block text-gray-700 text-sm font-bold mb-2">\par
+                            <EditableLabel currentLabel=\{reportData.generalLabels.upload\} sectionKey="generalLabels" fieldId="upload" onLabelChange=\{handleFieldLabelChange\} />\par
+                          </label>\par
+                          <input\par
+                            type="file"\par
+                            accept="image/*"\par
+                            multiple\par
+                            onChange=\{(e) => handleFileChange(e, section.id, itemIndex)\}\par
+                            className="form-input"\par
+                            disabled=\{(item.photos?.length || 0) >= 4\}\par
+                          />\par
+                          \{(item.photos && item.photos.length > 0) && (\par
+                            <div className="photo-preview-container">\par
+                              \{item.photos.map((photo, photoIdx) => (\par
+                                <div key=\{photoIdx\} style=\{\{ position: 'relative' \}\}>\par
+                                  <img src=\{photo\} alt=\{`Custom Section $\{itemIndex + 1\} Photo $\{photoIdx + 1\}`\} className="photo-preview" />\par
+                                  <button\par
+                                    type="button"\par
+                                    onClick=\{() => removePhotoFromSlot(section.id, itemIndex, photoIdx)\}\par
+                                    className="remove-photo-btn"\par
+                                  >\par
+                                    &times;\par
+                                  </button>\par
+                                </div>\par
+                              ))\}\par
+                            </div>\par
+                          )\}\par
+                        </div>\par
+                        <div className="absolute top-2 right-2">\par
+                          <SmallRemoveButton onClick=\{() => removeRow(section.id, section.type, itemIndex)\} title="Remove Item" />\par
+                        </div>\par
+                      </div>\par
+                    ))\}\par
+                    <button onClick=\{() => addRow(section.id, section.type)\} className="btn-add">\par
+                      \{reportData.generalLabels.addItem\}\par
+                    </button>\par
+                  </>\par
+                )\}\par
+\par
+                \{/* Additional Photos section */\}\par
+                \{section.type === 'additionalPhotos' && (\par
+                  <>\par
+                    <p className="text-sm text-gray-600 mb-4">\par
+                      <EditableLabel currentLabel=\{reportData.generalLabels.additionalPhotosInstruction\} sectionKey="generalLabels" fieldId="additionalPhotosInstruction" onLabelChange=\{handleFieldLabelChange\} className="editable-paragraph" />\par
+                    </p>\par
+                    \{section.data.map((photoItem, itemIndex) => (\par
+                      <div key=\{photoItem.id\} className="border p-4 rounded-md mb-4 relative">\par
+                        <h3 className="sub-section-title">\par
+                          <EditableLabel currentLabel=\{reportData.generalLabels.slotTitle\} sectionKey="generalLabels" fieldId="slotTitle" onLabelChange=\{handleFieldLabelChange\} /> \{itemIndex + 1\}\par
+                        </h3>\par
+                        <div>\par
+                          <label className="block text-gray-700 text-sm font-bold mb-2">\par
+                            <EditableLabel currentLabel=\{reportData.generalLabels.upload\} sectionKey="generalLabels" fieldId="upload" onLabelChange=\{handleFieldLabelChange\} />\par
+                          </label>\par
+                          <input\par
+                            type="file"\par
+                            accept="image/*"\par
+                            multiple\par
+                            onChange=\{(e) => handleFileChange(e, section.id, itemIndex)\}\par
+                            className="form-input"\par
+                            disabled=\{(photoItem.photos?.length || 0) >= 4\}\par
+                          />\par
+                          \{(photoItem.photos && photoItem.photos.length > 0) && (\par
+                            <div className="photo-preview-container">\par
+                              \{photoItem.photos.map((photo, photoIdx) => (\par
+                                <div key=\{photoIdx\} style=\{\{ position: 'relative' \}\}>\par
+                                  <img src=\{photo\} alt=\{`Additional Photo $\{itemIndex + 1\} Photo $\{photoIdx + 1\}`\} className="photo-preview" />\par
+                                  <button\par
+                                    type="button"\par
+                                    onClick=\{() => removePhotoFromSlot(section.id, itemIndex, photoIdx)\}\par
+                                    className="remove-photo-btn"\par
+                                  >\par
+                                    &times;\par
+                                  </button>\par
+                                </div>\par
+                              ))\}\par
+                            </div>\par
+                          )\}\par
+                        </div>\par
+                        <div className="absolute top-2 right-2">\par
+                          <SmallRemoveButton onClick=\{() => removeRow(section.id, section.type, itemIndex)\} title="Remove Photo Slot" />\par
+                        </div>\par
+                      </div>\par
+                    ))\}\par
+                    <button onClick=\{() => addRow(section.id, section.type)\} className="btn-add">\{reportData.generalLabels.addPhotoSlot\}</button>\par
+                  </>\par
+                )\}\par
+              </div>\par
+              \{/* Button to add section after current one */\}\par
+              <div className="flex justify-center my-4">\par
+                <AddSectionButton onClick=\{() => insertSection(reportData.sections.indexOf(section) + 1)\} />\par
+              </div>\par
+            </React.Fragment>\par
+          ))\}\par
+\par
+          <div className="form-section">\par
+            <h3 className="sub-section-title">\par
+              <EditableLabel currentLabel=\{getBaseTitle('branchCellLeaders')\} sectionKey="branchCellLeaders" onLabelChange=\{(sk, fid, newLabel) => setReportData(prev => (\{...prev, branchCellLeaders: \{...prev.branchCellLeaders, fields: prev.branchCellLeaders.fields.map(f => f.id === fid ? \{...f, label: newLabel\} : f)\}\}))\} className="editable-sub-section-title" />\par
+            </h3>\par
+            \{reportData.branchCellLeaders.fields.map(field => (\par
+              <div key=\{field.id\} className="flex items-center">\par
+                <label htmlFor=\{`branchCellLeaders-$\{field.id\}`\} className="block text-gray-700 text-sm font-bold mb-2 flex-grow">\par
+                  <EditableLabel\par
+                    currentLabel=\{field.label\}\par
+                    sectionKey="branchCellLeaders"\par
+                    fieldId=\{field.id\}\par
+                    onLabelChange=\{handleFieldLabelChange\}\par
+                  />\par
+                </label>\par
+                <input\par
+                  type=\{field.type\}\par
+                  id=\{`branchCellLeaders-$\{field.id\}`\}\par
+                  value=\{field.value || ''\}\par
+                  onChange=\{(e) => handleFieldValueChange('branchCellLeaders', field.id, e.target.value)\}\par
+                  className="form-input flex-grow"\par
+                />\par
+                \{/* Removed add field button */\}\par
+                \{reportData.branchCellLeaders.fields.length > 1 && (\par
+                  <FieldActionButton type="remove" onClick=\{() => removeFieldFromSection('branchCellLeaders', field.id)\} />\par
+                )\}\par
+              </div>\par
+            ))\}\par
+            <button onClick=\{() => addFieldToSection('branchCellLeaders', null, 'text')\} className="btn-add mt-4">\{reportData.generalLabels.addField\}</button>\par
+\par
+            \{/* Other Leaders section as a dynamic table */\}\par
+            <h3 className="sub-section-title">\par
+              <EditableLabel currentLabel=\{reportData.generalLabels.otherLeadersTableTitle\} sectionKey="generalLabels" fieldId="otherLeadersTableTitle" onLabelChange=\{handleFieldLabelChange\} className="editable-sub-section-title" />\par
+            </h3>\par
+            <table className="pdf-table">\par
+              <thead>\par
+                <tr>\par
+                  \{/* Headers are now editable labels from the template */\}\par
+                  \{reportData.branchCellLeaders.otherLeadersColumnTemplate.map(field => (\par
+                    <th key=\{field.id\}>\par
+                      <strong>\par
+                        <EditableLabel\par
+                          currentLabel=\{field.label.replace(':', '')\}\par
+                          sectionKey="otherLeadersColumnTemplate" // Point to the template for label edits\par
+                          fieldId=\{field.id\}\par
+                          onLabelChange=\{handleFieldLabelChange\}\par
+                        />\par
+                      </strong>\par
+                    </th>\par
+                  ))\}\par
+                  \{/* Removed Actions column header */\}\par
+                </tr>\par
+              </thead>\par
+              <tbody>\par
+                \{reportData.branchCellLeaders.otherLeaders.length > 0 ? (\par
+                  reportData.branchCellLeaders.otherLeaders.map((leader, leaderIndex) => (\par
+                    <tr key=\{leader.id\}>\par
+                      \{reportData.branchCellLeaders.otherLeadersColumnTemplate.map(templateField => \{\par
+                        const actualField = leader.fields.find(f => f.id === templateField.id); // Find by ID\par
+                        return (\par
+                          <td key=\{templateField.id\}>\par
+                            <input\par
+                              type=\{templateField.type\} // Use type from template\par
+                              value=\{actualField?.value || ''\}\par
+                              onChange=\{(e) => handleFieldValueChange('otherLeaders', actualField.id, e.target.value, leaderIndex)\}\par
+                              className="form-input text-center"\par
+                              style=\{\{marginBottom: '0'\}\}\par
+                            />\par
+                          </td>\par
+                        );\par
+                      \})\}\par
+                      \{/* Removed Actions column data */\}\par
+                    </tr>\par
+                  ))\par
+                ) : (\par
+                  <tr><td colSpan=\{reportData.branchCellLeaders.otherLeadersColumnTemplate.length\} style=\{\{textAlign: 'center', color: '#666'\}\}>\{reportData.generalLabels.noOtherLeaders\}</td></tr>\par
+                )\}\par
+              </tbody>\par
+            </table>\par
+            <button onClick=\{addOtherLeader\} className="btn-add mt-4">\{reportData.generalLabels.addOtherLeader\}</button>\par
+          </div>\par
+\par
+          <div style=\{\{marginTop: '30px', textAlign: 'center', fontSize: '9pt', color: '#666'\}\}>\par
+            <strong>\{reportData.generalLabels.footerText\}</strong>\par
+          </div>\par
+        </div>\par
+\par
+\par
+        \{/* This is the PDF output section, hidden from view but used by html2pdf */\}\par
+        <div ref=\{pdfContentRef\} className="pdf-report-container">\par
+          <h1 style=\{\{ textAlign: 'center', fontSize: '18pt', fontWeight: 'bold', marginBottom: '20px' \}\}><strong>\{reportData.generalLabels.mainTitle\}</strong> Branch/Cell Church</h1>\par
+\par
+          \{/* General Information */\}\par
+          <div className="pdf-section">\par
+            <h2 className="pdf-section-title"><strong>\{getBaseTitle('generalInfo')\}</strong></h2>\par
+            \{reportData.generalInfo.map(field => (\par
+              <div key=\{field.id\} className="pdf-text-field">\par
+                <strong>\{field.label\}</strong> <span>\{field.value || '.'\}</span>\par
+              </div>\par
+            ))\}\par
+          </div>\par
+\par
+          \{/* Dynamic Sections for PDF */\}\par
+          \{reportData.sections.map((section) => (\par
+            <React.Fragment key=\{section.id\}>\par
+              \{/* Render fields for sections that are directly an array of fields */\}\par
+              \{Array.isArray(section.data) && !(section.data[0] && 'fields' in section.data[0]) && section.type !== 'additionalPhotos' && (\par
+                <div className="pdf-section">\par
+                  <h2 className="pdf-section-title"><strong>\{section.title || ''\}</strong></h2>\par
+                  \{/* Conditional rendering for sections 6, 10, 11, 12, 13, 14 */\}\par
+                  \{['ministerialEldershipSupport', 'offeringsFinance', 'facilitiesLogistics', 'challengesRecommendations', 'acknowledgments', 'summaryNextSteps'].includes(section.type) ? (\par
+                    <table className="pdf-table">\par
+                      <thead>\par
+                        <tr>\par
+                          <th><strong>\{section.type === 'offeringsFinance' || section.type === 'facilitiesLogistics' ? 'Item' : 'Category'\}</strong></th>\par
+                          <th><strong>\{section.type === 'offeringsFinance' ? 'Amount /Details' : (section.type === 'facilitiesLogistics' ? 'Description / Status' : 'Details')\}</strong></th>\par
+                        </tr>\par
+                      </thead>\par
+                      <tbody>\par
+                        \{section.data.length > 0 ? (\par
+                          section.data.map((field) => (\par
+                            <tr key=\{field.id\}>\par
+                              <td>\{field.label.replace(':', '')\}</td>\par
+                              <td>\{field.value || '&nbsp;'\}</td>\par
+                            </tr>\par
+                          ))\par
+                        ) : (\par
+                          <tr><td colSpan="2" style=\{\{textAlign: 'center', color: '#666'\}\}>No data recorded.</td></tr>\par
+                        )\}\par
+                      </tbody>\par
+                    </table>\par
+                  ) : (\par
+                    // Existing rendering for other sections that are an array of fields\par
+                    section.data.map(field => (\par
+                      <div key=\{field.id\} className="pdf-text-field">\par
+                        <strong>\{field.label\}</strong> <span>\{field.value || '.'\}</span>\par
+                      </div>\par
+                    ))\par
+                  )\}\par
+                </div>\par
+              )\}\par
+\par
+              \{/* Render items for sections that are an array of items (each with fields) */\}\par
+              \{Array.isArray(section.data) && section.data[0] && 'fields' in section.data[0] && section.type !== 'customSection' && (\par
+                <div className="pdf-section">\par
+                  <h2 className="pdf-section-title"><strong>\{section.title || ''\}</strong></h2>\par
+                  <table className="pdf-table">\par
+                    <thead>\par
+                      <tr>\par
+                        \{/* Dynamically generate headers from all unique field labels across all items */\}\par
+                        \{Array.from(new Set(section.data.flatMap(item => item.fields ? item.fields.map(field => field.label) : [])))\par
+                          .map((label, idx) => (\par
+                            <th key=\{idx\}><strong>\{label.replace(':', '')\}</strong></th>\par
+                        ))\}\par
+                      </tr>\par
+                    </thead>\par
+                    <tbody>\par
+                      \{section.data.length > 0 ? (\par
+                        section.data.map((item, itemIndex) => (\par
+                          <tr key=\{item.id\}>\par
+                            \{Array.from(new Set(section.data.flatMap(item => item.fields ? item.fields.map(field => field.label) : [])))\par
+                              .map((headerLabel, fieldIdx) => \{\par
+                                const field = item.fields ? item.fields.find(f => f.label === headerLabel) : undefined;\par
+                                return <td key=\{fieldIdx\}>\{field ? field.value || '&nbsp;' : '&nbsp;'\}</td>;\par
+                              \})\}\par
+                          </tr>\par
+                        ))\par
+                      ) : (\par
+                        <tr><td colSpan=\{Array.from(new Set(section.data.flatMap(item => item.fields ? item.fields.map(field => field.label) : []))).length || 1\} style=\{\{textAlign: 'center', color: '#666'\}\}>\par
+                          \{reportData.generalLabels[`no$\{section.type.charAt(0).toUpperCase() + section.type.slice(1)\}`] || 'No data recorded.'\}\par
+                        </td></tr>\par
+                      )\}\par
+                    </tbody>\par
+                  </table>\par
+                  \{section.data.some(item => item.photos && item.photos.length > 0) && (\par
+                    <div className="pdf-photo-section">\par
+                      <h3 className="pdf-sub-section-title"><strong>Photos:</strong></h3>\par
+                      <div className="pdf-photo-grid">\par
+                        \{section.data.map((item) => (\par
+                          item.photos && item.photos.map((photo, photoIdx) => (\par
+                            photo && (\par
+                              <div key=\{photoIdx\} className="pdf-photo-container">\par
+                                <img src=\{photo\} alt=\{`Item Photo $\{photoIdx + 1\}`\} className="pdf-photo" />\par
+                              </div>\par
+                            )\par
+                          ))\par
+                        ))\}\par
+                      </div>\par
+                    </div>\par
+                  )\}\par
+                  \{!section.data.some(item => item.photos && item.photos.length > 0) && (\par
+                    <p style=\{\{textAlign: 'center', color: '#666', marginTop: '10px'\}\}>\{reportData.generalLabels.noPhotosUploaded\}</p>\par
+                  )\}\par
+                </div>\par
+              )\}\par
+\par
+              \{/* Custom Section rendering (similar to array of items) */\}\par
+              \{section.type === 'customSection' && (\par
+                <div className="pdf-section">\par
+                  <h2 className="pdf-section-title"><strong>\{section.title || ''\}</strong></h2>\par
+                  \{section.data.length > 0 ? (\par
+                    <>\par
+                      <table className="pdf-table">\par
+                        <thead>\par
+                          <tr>\par
+                            \{/* Dynamically generate headers from all unique field labels across all items */\}\par
+                            \{Array.from(new Set(section.data.flatMap(item => item.fields ? item.fields.map(field => field.label) : [])))\par
+                              .map((label, idx) => (\par
+                                <th key=\{idx\}><strong>\{label.replace(':', '')\}</strong></th>\par
+                            ))\}\par
+                          </tr>\par
+                        </thead>\par
+                        <tbody>\par
+                          \{section.data.map((item, itemIndex) => (\par
+                            <tr key=\{item.id\}>\par
+                              \{Array.from(new Set(section.data.flatMap(item => item.fields ? item.fields.map(field => field.label) : [])))\par
+                                .map((headerLabel, fieldIdx) => \{\par
+                                  const field = item.fields ? item.fields.find(f => f.label === headerLabel) : undefined;\par
+                                  return <td key=\{fieldIdx\}>\{field ? field.value || '&nbsp;' : '&nbsp;'\}</td>;\par
+                                \})\}\par
+                            </tr>\par
+                          ))\}\par
+                        </tbody>\par
+                      </table>\par
+                      \{section.data.some(item => item.photos && item.photos.length > 0) && (\par
+                        <div className="pdf-photo-section">\par
+                          <h3 className="pdf-sub-section-title"><strong>Photos:</strong></h3>\par
+                          <div className="pdf-photo-grid">\par
+                            \{section.data.map((item) => (\par
+                              item.photos && item.photos.map((photo, photoIdx) => (\par
+                                photo && (\par
+                                  <div key=\{photoIdx\} className="pdf-photo-container">\par
+                                    <img src=\{photo\} alt=\{`Custom Section Photo $\{photoIdx + 1\}`\} className="pdf-photo" />\par
+                                  </div>\par
+                                )\par
+                              ))\par
+                            ))\}\par
+                          </div>\par
+                        </div>\par
+                      )\}\par
+                      \{!section.data.some(item => item.photos && item.photos.length > 0) && (\par
+                        <p style=\{\{textAlign: 'center', color: '#666', marginTop: '10px'\}\}>\{reportData.generalLabels.noPhotosUploaded\}</p>\par
+                      )\}\par
+                    </>\par
+                  ) : (\par
+                    <p style=\{\{textAlign: 'center', color: '#666', marginTop: '10px'\}\}>\{reportData.generalLabels.noCustomItems\}</p>\par
+                  )\}\par
+                </div>\par
+              )\}\par
+\par
+              \{section.type === 'additionalPhotos' && (\par
+                <div className="pdf-section pdf-page-break">\par
+                  <h2 className="pdf-section-title"><strong>\{section.title || ''\}</strong></h2>\par
+                  <p style=\{\{marginBottom: '10px'\}\}><strong>\{reportData.generalLabels.additionalPhotosInstruction\}</strong></p>\par
+                  \{section.data.some(photoItem => photoItem.photos && photoItem.photos.length > 0) ? (\par
+                    section.data.map((photoItem, index) => (\par
+                      photoItem.photos && photoItem.photos.length > 0 && (\par
+                        <div key=\{index\} className="pdf-photo-section">\par
+                          <h3 className="pdf-sub-section-title"><strong>\{reportData.generalLabels.slotTitle\} \{index + 1\}:</strong></h3>\par
+                          <div className="pdf-photo-grid">\par
+                            \{photoItem.photos.map((photo, photoIdx) => (\par
+                              photo && (\par
+                                <div key=\{photoIdx\} className="pdf-photo-container">\par
+                                  <img src=\{photo\} alt=\{`Additional Photo $\{index + 1\} Photo $\{photoIdx + 1\}`\} className="pdf-photo" />\par
+                                </div>\par
+                              )\par
+                            ))\}\par
+                          </div>\par
+                        </div>\par
+                      )\par
+                    ))\par
+                  ) : (\par
+                    <p style=\{\{textAlign: 'center', color: '#666'\}\}>\{reportData.generalLabels.noAdditionalPhotos\}</p>\par
+                  )\}\par
+                </div>\par
+              )\}\par
+            </React.Fragment>\par
+          ))\}\par
+\par
+          <div className="form-section">\par
+            <h3 className="pdf-sub-section-title"><strong>\{getBaseTitle('branchCellLeaders')\}</strong></h3>\par
+            \{reportData.branchCellLeaders.fields.map(field => (\par
+              <div key=\{field.id\} className="pdf-text-field">\par
+                <strong>\{field.label\}</strong> <span>\{field.value || '.'\}</span>\par
+              </div>\par
+            ))\}\par
+\par
+            <h3 className="pdf-sub-section-title"><strong>\{reportData.generalLabels.otherLeadersTableTitle\}</strong></h3>\par
+            <table className="pdf-table">\par
+              <thead>\par
+                <tr>\par
+                  \{/* Use otherLeadersColumnTemplate for PDF headers */\}\par
+                  \{reportData.branchCellLeaders.otherLeadersColumnTemplate.map(field => (\par
+                    <th key=\{field.id\}><strong>\{field.label.replace(':', '')\}</strong></th>\par
+                  ))\}\par
+                </tr>\par
+              </thead>\par
+              <tbody>\par
+                \{reportData.branchCellLeaders.otherLeaders.length > 0 ? (\par
+                  reportData.branchCellLeaders.otherLeaders.map((leader, index) => (\par
+                    <tr key=\{leader.id\}>\par
+                      \{reportData.branchCellLeaders.otherLeadersColumnTemplate.map(templateField => \{\par
+                        const actualField = leader.fields.find(f => f.id === templateField.id);\par
+                        return <td key=\{templateField.id\}>\{actualField?.value || '&nbsp;'\}</td>;\par
+                      \})\}\par
+                    </tr>\par
+                  ))\par
+                ) : (\par
+                  <tr><td colSpan=\{reportData.branchCellLeaders.otherLeadersColumnTemplate.length\} style=\{\{textAlign: 'center', color: '#666'\}\}>\{reportData.generalLabels.noOtherLeaders\}</td></tr>\par
+                )\}\par
+              </tbody>\par
+            </table>\par
+            <button onClick=\{addOtherLeader\} className="btn-add mt-4">\{reportData.generalLabels.addOtherLeader\}</button>\par
+          </div>\par
+\par
+          <div style=\{\{marginTop: '30px', textAlign: 'center', fontSize: '9pt', color: '#666'\}\}>\par
+            <strong>\{reportData.generalLabels.footerText\}</strong>\par
+          </div>\par
+        </div>\par
+      </div>\par
+    </div>\par
+  );\par
+\};\par
+\par
+export default App;\par
+}
+ 
